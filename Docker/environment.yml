@@ -1,0 +1,17 @@
+# You can use this file to create a conda environment for this pipeline:
+#   conda env create -f environment.yml
+name: obesity_analysis
+channels:
+  - bioconda
+  - conda-forge
+
+dependencies:
+  - bioconda::plink=1.90b6.18 
+  - bioconda::vcftools=0.1.16
+  - bioconda::rvtests=2.0.7
+  - bioconda::bcftools=1.11
+  - conda-forge::r-base=4.0.3
+  - conda-forge::r-tidyverse=1.3.0
+  - conda-forge::r-biocmanager=1.30.10
+  - conda-forge::r-devtools=2.3.2
+ 
