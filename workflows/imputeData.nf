@@ -99,6 +99,6 @@ process checkGenotypes {
 
   script:
   """
-  perl HRC-1000G-check-bim.pl -b $bim -f $freq -r $HRCref -h
+  HRC-1000G-check-bim.pl -b $bim -f $freq -r $HRCref -h
   """
 }

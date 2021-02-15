@@ -4,3 +4,7 @@
 .Ruserdata
 data/
 results/
+work/
+test/
+.nextflow.log*
+.nextflow/
