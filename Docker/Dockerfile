@@ -2,6 +2,10 @@ FROM nfcore/base:1.12.1
 LABEL authors="Carlos Ruiz-Arenas" \
       description="Docker image containing all software requirements for the Obesity Analysis"
 
+# Instal basic Ubuntu programs
+RUN apt-get update --fix-missing && \
+  apt-get install -q -y build-essential
+
 # Install mamba to manage conda
 RUN conda install mamba -c conda-forge
 # Install the conda environment
@@ -19,7 +23,3 @@ RUN R -e 'BiocManager::install(c("Biostrings", "snpStats", "VariantAnnotation", 
 
 # Install scoreInvHap
 RUN R -e 'devtools::install_github("isglobal-brge/scoreInvHap")'
-
-# Install imputation bot
-RUN curl -sL imputationbot.now.sh | bash
-
