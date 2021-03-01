@@ -72,18 +72,45 @@ process fulldatatableTotped {
   else
     ncol = 3
   """
-  awk -F'\\t' 'BEGIN { OFS = FS } NR > 1 {print \$2, \$1, "0", \$3;}' $geno > annot.txt ## Select annot fields
-  awk -F'\\t' 'NR > 1 {for (i = 4; i <= NF; i += $ncol) printf ("%s%c", \$i, i + $ncol <= NF ? "\\t" : "\\n");}' $geno > genomat.txt ## Prepare genotypes
-  ## Transform genotypes to tped format
-  sed -i 's/AA/A\tA/g' genomat.txt
-  sed -i 's/AB/A\tB/g' genomat.txt
-  sed -i 's/BB/B\tB/g' genomat.txt
-  sed -i 's/NC/0\t0/g' genomat.txt
-  paste annot.txt genomat.txt > cohort.tped
-
   awk -F'\\t' 'NR == 1 {for (i = 4; i <= NF; i += $ncol) print \$i;}' $geno > samps.txt ## Get sample names
   sed -i 's/.GType//g' samps.txt
-  awk -F'\\t' 'BEGIN { OFS = FS } {print \$1, \$1, 0, 0, 0, 0}' samps.txt > cohort.tfam
+  dups=\$(sort samps.txt | uniq -d | sort -nr | grep -w -n -f - samps.txt | cut -d : -f 1) ## Select duplicated samples
+
+  awk -F'\\t' 'BEGIN { OFS = FS } NR > 1 {print \$2, \$1, "0", \$3;}' $geno > annot.txt ## Select annot fields
+  awk -F'\\t' 'NR > 1 {for (i = 4; i <= NF; i += $ncol) printf ("%s%c", \$i, i + $ncol <= NF ? "\\t" : "\\n");}' $geno > genomat.txt ## Prepare genotypes
+
+  if [ -z "\$dups" ]
+  then
+    mv genomat.txt genomat.filt
+    mv samps.txt samps.filt
+  else
+
+    index=""
+    ## Create vector of duplicated samples
+    for i in \${dups[@]}
+    do
+      index=\$index,\$i
+    done
+    index=\${index:1}
+
+    ## Remove duplicated samples from genomat
+    cut --complement -f \$index genomat.txt > genomat.filt
+    ## Remove duplicated samples from samps
+    sort samps.txt | uniq -d | sort -nr | grep -w -v -f - samps.txt > samps.filt
+  fi
+
+  ## Transform genotypes to tped format
+  sed -i 's/AA/A\tA/g' genomat.filt
+  sed -i 's/AB/A\tB/g' genomat.filt
+  sed -i 's/BB/B\tB/g' genomat.filt
+  sed -i 's/NC/0\t0/g' genomat.filt
+  paste annot.txt genomat.filt > cohort.tped
+
+
+  awk -F'\\t' 'BEGIN { OFS = FS } {print \$1, \$1, 0, 0, 0, 0}' samps.filt > cohort.tfam
+
+
+
   """
 }
 
@@ -105,15 +132,34 @@ process tpedToPlink {
 }
 ch_plink_variants = ch_plink_ini.join(ch_map)
 
-// Convert tped to plink
+// Add correct allele and remove SNP with low call rate
 process addAlleles {
+
+  tag "$cohort"
+
+
+  input:
+  set val(cohort), file(bed), file(bim), file(fam), file(annot) from ch_plink_variants
+
+  output:
+  set val(cohort), file("allele.bed"), file("allele.bim"), file("allele.fam") into ch_plink_allele
+
+  script:
+  """
+  plink --bfile cohort --update-alleles $annot --geno 0.1 --make-bed --out allele
+  """
+}
+
+
+// Exclude bad samples
+process excludeBadSamples {
 
   tag "$cohort"
 
   publishDir "${params.outdir}/preImputation/plink/${cohort}/${date}", mode: 'copy'
 
   input:
-  set val(cohort), file(bed), file(bim), file(fam), file(annot) from ch_plink_variants
+  set val(cohort), file(bed), file(bim), file(fam) from ch_plink_allele
 
   output:
   set val(cohort), file("${cohort}.bed"), file("${cohort}.bim"), file("${cohort}.fam") into ch_geno_plink, ch_geno_plink2
@@ -121,7 +167,7 @@ process addAlleles {
 
   script:
   """
-  plink --bfile cohort --update-alleles $annot --make-bed --out $cohort
+  plink --bfile allele  --mind 0.1 --make-bed --out $cohort
   """
 }
 

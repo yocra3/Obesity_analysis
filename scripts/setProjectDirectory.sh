@@ -7,6 +7,7 @@
 ## Make folders
 mkdir data
 mkdir results
+mkdir bin
 
 ## Link raw data
 ### Genotypes

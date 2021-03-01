@@ -8,3 +8,4 @@ work/
 test/
 .nextflow.log*
 .nextflow/
+bin/
