@@ -26,6 +26,16 @@ bin/imputationbot impute --files $vcf/Obesity1/2021-02-17/ --refpanel hrc-r1.1 -
 bin/imputationbot impute --files $vcf/Obesity2/2021-02-17/ --refpanel hrc-r1.1 --r2Filter 0.3 --population eur --name Obesity2 --project Obesity-proj
 bin/imputationbot impute --files $vcf/Obesity3/2021-02-17/ --refpanel hrc-r1.1 --r2Filter 0.3 --population eur --name Obesity3 --project Obesity-proj
 
-
 ## Download files
 bin/imputationbot download Obesity-proj --output results/postImputation/MichiganOutput/
+
+## Decompress
+folds=$(ls results/postImputation/MichiganOutput)
+for fold in $folds
+do
+  new="$(cut -d'-' -f7 <<<$fold)"
+  for file in $(ls results/postImputation/MichiganOutput/$fold/local)
+  do
+    unzip -P `cat results/postImputation/MichiganOutput/$fold/pass` results/postImputation/MichiganOutput/$fold/local/$file -d results/postImputation/MichiganOutput/$new
+  done
+done
