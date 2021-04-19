@@ -9,3 +9,8 @@ test/
 .nextflow.log*
 .nextflow/
 bin/
+*.html
+**cache/
+*.png
+*.ods
+*.ods#

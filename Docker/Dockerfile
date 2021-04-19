@@ -18,8 +18,13 @@ ENV PATH /opt/conda/envs/obesity_analysis/bin:$PATH
 # Dump the details of the installed packages to a file for posterity
 RUN conda env export --name obesity_analysis > obesity_analysis.yml
 
+# Install PAINTOR
+RUN cd /opt/conda/ && git clone https://github.com/gkichaev/PAINTOR_V3.0.git && \
+  cd PAINTOR_V3.0 && bash install.sh
+
 # Install Bioconductor
-RUN R -e 'BiocManager::install(c("Biostrings", "snpStats", "VariantAnnotation", "GenomicRanges", "BiocParallel", "SummarizedExperiment"))'
+RUN R -e 'BiocManager::install(c("Biostrings", "snpStats", "VariantAnnotation", "GenomicRanges", "BiocParallel", "SummarizedExperiment",\
+                                  "SNPassoc"))'
 
 # Install scoreInvHap
 RUN R -e 'devtools::install_github("isglobal-brge/scoreInvHap")'

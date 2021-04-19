@@ -8,12 +8,17 @@ channels:
 
 dependencies:
   - conda-forge::r-xml
-  - bioconda::plink=1.90b6.18 
+  - bioconda::plink=1.90b6.18
   - bioconda::vcftools=0.1.16
   - bioconda::rvtests=2.0.7
   - bioconda::bcftools=1.11
+  - bioconda::peddy
+  - bioconda::cyvcf2
+  - bioconda::gcta
+  - bioconda::java-jdk=8.0.112
   - conda-forge::r-base=4.0.3
   - conda-forge::r-tidyverse=1.3.0
   - conda-forge::r-biocmanager=1.30.10
   - conda-forge::r-devtools=2.3.2
- 
+  - conda-forge::r-poisbinom=1.0.1
+  - conda-forge::r-rsqlite=2.2.5

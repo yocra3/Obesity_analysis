@@ -1,0 +1,255 @@
+---
+title: "QC imputation"
+author: "Carlos Ruiz"
+date: "16/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Introduction
+
+In this report, we will summarize the main results from the imputation process.
+
+```{r}
+library(VariantAnnotation)
+library(kableExtra)
+library(tidyverse)
+```
+
+## Initial datasets
+
+We included four datasets in this analyses. Three datasets contained individuals with severe obesity genotyped with three different arrays (Obesity1, Obesity2 and Obesity3). One dataset was used as control and they are control individuals from Epicuro project.
+
+```{r}
+getNumLines <- function(path){
+  com <- system(paste("wc -l", path), intern = TRUE)
+  as.numeric(strsplit(com, " ")[[1]][1])
+}
+
+iniFiles <- dir(path = "../data", pattern = "Full", full.names = TRUE)
+names(iniFiles) <- gsub(".FullDataTable.txt", "", gsub("../data/", "", iniFiles))
+
+samps <- sapply(iniFiles[names(iniFiles) !=  "Obesity1"], function(x) {
+  header <- readLines(x, n = 1)
+  (length(strsplit(header, "\t")[[1]]) - 3) / 3
+  })
+obe1c <- readLines(iniFiles["Obesity1"], n = 1)
+samps <- c(samps, Obesity1 = (length(strsplit(obe1c, "\t")[[1]]) - 3) / 4)
+
+annotFiles <- dir(path = "../data", pattern = "annot", full.names = TRUE)
+names(annotFiles) <- gsub(".annot.csv", "", gsub("../data/", "", annotFiles))
+
+vars <- sapply(annotFiles, getNumLines)
+datasets <- c(paste0("Obesity", 1:3), "Epicuro")
+inidf <- data.frame(Dataset = datasets, Samples = samps[datasets], Variants = vars[datasets])
+inidf %>%
+  kbl(row.names = FALSE) %>%
+  kable_styling()
+```
+
+## Imputation preprocessing
+
+Datasets undergo two main preprocessing steps before passing to imputation. First, we applied an initial QC to the data:
+
+-   We discarded duplicate individuals inside a dataset
+-   We discarded SNPs with call rate \< 90%
+-   We discarded samples with call rate \< 90%.
+
+The following table shows the statistics after this initial QC:
+
+```{r}
+iniQCall <- dir(path = "../results/preImputation/plink/", pattern = "fam|bim",
+  full.names = TRUE, recursive = TRUE)
+version <- "2021-03-16"
+iniQCall <- iniQCall[grep(version, iniQCall)]
+
+## Get samples
+iniQCfam <- iniQCall[grep("fam", iniQCall)]
+names(iniQCfam) <- gsub(".fam", "", basename(iniQCfam))
+sampsiniQC <- sapply(iniQCfam, getNumLines)
+
+## Get variants
+iniQCbim <- iniQCall[grep("bim", iniQCall)]
+names(iniQCbim) <- gsub(".bim", "", basename(iniQCbim))
+varsiniQC <- sapply(iniQCbim, getNumLines)
+
+iniQCdf <- data.frame(Dataset = datasets, Samples = sampsiniQC[datasets],
+  DiscardedSamples = samps[datasets] - sampsiniQC[datasets],
+  Variants = varsiniQC[datasets],
+  DiscardedVariants = vars[datasets] - varsiniQC[datasets]
+)
+iniQCdf %>%
+  kbl(row.names = FALSE) %>%
+  kable_styling()
+```
+
+Next, we applied a tool developed by Will Rayner to prepare data for HRC imputation. This tool discards variants that do not match HRC reference.
+
+```{r}
+getNumVariants <- function(path){
+  com <- system(paste("zgrep -v '^#'", path, "|wc -l"), intern = TRUE)
+  as.numeric(strsplit(com, " ")[[1]][1])
+}
+
+HRCvcfs <- dir(path = "../results/preImputation/VCF/", pattern = "vcf",
+  full.names = TRUE, recursive = TRUE)
+version <- "2021-03-16"
+HRCvcfs <- HRCvcfs[grep(version, HRCvcfs)]
+HRCvariants <- sapply(datasets, function(x){
+  data.vcfs <- HRCvcfs[grep(x, HRCvcfs)]
+  sum(sapply(data.vcfs, getNumVariants))
+})
+
+HRCQCdf <- data.frame(Dataset = datasets,
+  Variants = HRCvariants[datasets],
+  DiscardedVariants = varsiniQC[datasets] - HRCvariants[datasets]
+)
+HRCQCdf %>%
+  kbl(row.names = FALSE) %>%
+  kable_styling()
+```
+
+The following table summarizes the initial and final number of samples and the samples removed in each step:
+
+```{r}
+preImpQC <- data.frame(Dataset = datasets, Initial = samps[datasets],
+  "Initial QC" = samps[datasets] - sampsiniQC[datasets], Final = sampsiniQC[datasets])
+preImpQC %>%
+    kbl(row.names = FALSE) %>%
+    kable_styling()
+```
+
+The following table summarizes the initial and final number of variants and the variants removed in each step:
+
+```{r}
+preImpQCvars <- data.frame(Dataset = datasets, Initial = vars[datasets],
+  "Initial QC" = vars[datasets] - varsiniQC[datasets],
+  "HRC QC" = varsiniQC[datasets] - HRCvariants[datasets],
+  Final = HRCvariants[datasets])
+preImpQCvars %>%
+    kbl(row.names = FALSE) %>%
+    kable_styling()
+```
+
+## Imputation
+
+Non-measured variants were imputed using Michigan server with the following configuration:
+
+-   Panel: HRC
+-   r2Filter: 0.3
+-   Population: EUR
+-   Build: hg19
+
+```{r, cache = TRUE}
+Impvcfs <- dir(path = "../results/postImputation/MichiganOutput/", pattern = "vcf",
+  full.names = TRUE, recursive = TRUE)
+Impvariants <- sapply(datasets, function(x){
+  data.vcfs <- Impvcfs[grep(x, Impvcfs)]
+  sum(sapply(data.vcfs, getNumVariants))
+})
+
+Impdf <- data.frame(Dataset = datasets,
+  Samples = sampsiniQC[datasets],
+  Variants = Impvariants[datasets]
+)
+Impdf %>%
+  kbl(row.names = FALSE) %>%
+  kable_styling()
+```
+
+We merged the four imputed datasets and selected the variants present in all of them.
+
+```{r, cache = TRUE}
+comVariants <- getNumVariants("../results/postImputation/merged/2021-04-06/merged.imputation.vcf.gz")
+```
+
+From this step, we worked with the `r comVariants` variants present in the four datasets and imputed with a R2 \> 0.3.
+
+## Samples QC
+
+Based on the imputated dataset, we applied different filters to remove samples:
+
+-   Syndromic: individuals having a syndromic condition were not considered.
+-   Sex discrepancies: reported sex different than sex derived from sexual chromosomes.
+-   Repeated samples or relatives: samples with an IBD computation from plink \> 0.1. With this parameter, we identify samples present in different datasets or samples from related individuals.
+-   Control samples: Some control samples were included in the analysis. We also removed these samples.
+-   Ancestry: we selected only samples with \> 90% probability of being from European ancestry.
+- Non-obesity samples: Obesity1 included samples from other projects
+
+```{r}
+filterSamps <- read.delim("../results/postImputation/stats/2021-04-06/exclude.samps.reason.txt", sep = "\t", header = FALSE)
+colnames(filterSamps) <- c("sample_id", "reason")
+ancestry <- read.csv("../results/postImputation/stats/2021-04-06/merged.het_check.csv")
+initialExcl <- read.delim("../results/phenotypes/2021-04-06/bad.samples.txt", header = FALSE)
+colnames(initialExcl) <- c("sample_id", "reason")
+initialExcl <- initialExcl[!is.na(initialExcl$sample_id), ] 
+initialExcl$reason <- "Syndromic"
+
+nonObe <- read.delim("../data/Obesity1.extra.samps", header = FALSE)
+colnames(nonObe) <- "sample_id"
+nonObe$reason <- "Non Obesity"
+
+## Prepare ancestry
+ancestry$reason <- "Non-European"
+ancestry.filt <- subset(ancestry, ancestry.prediction != "EUR" | ancestry.prob < 0.9)[, c("sample_id", "reason")]
+
+
+
+## Map to cohort
+famObj <- lapply(iniQCfam, read.delim, header = FALSE, sep = " ")
+famDf <- Reduce(rbind, famObj) %>%
+  mutate(Dataset = rep(names(iniQCfam), sapply(famObj, nrow)),
+         sample_id = V2) %>%
+  dplyr::select(sample_id, Dataset)
+
+excludedSamps  <- rbind(filterSamps, 
+                        ancestry.filt, 
+                        initialExcl,
+                        nonObe) %>%
+  filter(!duplicated(sample_id)) %>%
+  left_join(famDf, by = "sample_id")
+
+excludeDf <- excludedSamps %>% 
+  group_by(Dataset, reason) %>%
+  summarize(n = n()) %>%
+  spread(reason, n) %>%
+  filter(!is.na(Dataset))
+excludeDf[is.na(excludeDf)] <- 0
+
+finalSamps <- data.frame(Dataset = datasets, Initial = sampsiniQC[datasets]) %>%
+  left_join(excludeDf, by = "Dataset") %>%
+  left_join(excludedSamps %>% group_by(Dataset) %>% summarize(Final = n()), by = "Dataset") %>%
+  mutate(Final = Initial - Final)
+finalSamps %>% 
+  t() %>%
+  data.frame() %>%
+  kbl() %>%
+  kable_styling()
+```
+
+## Ancestry
+
+We explored potential population stratification in our data. First, we evaluated the stratification before the filtering.
+
+```{r}
+ancdf <- left_join(ancestry, famDf, by = "sample_id")
+ggplot(ancdf, aes(x = PC1, y = PC2, col = Dataset, shape = ancestry.prediction)) +
+  geom_point()
+```
+
+Most samples are predicted as European (cross) and are grouped in a central cluster. A high number of Obesity3 samples are identified as belonging to other populations and have been discarded.
+
+```{r}
+pcageno <- read.table("../results/postImputation/stats/2021-04-06/mergedDataset.filtered.eigenvec") %>%
+  mutate(sample_id = V2,
+         PC1 = V3, 
+         PC2 = V4) %>%
+  left_join(famDf, by = "sample_id")
+ggplot(pcageno, aes(x = PC1, y = PC2, col = Dataset)) +
+  geom_point()
+```
+
+Even after selecting European samples, we still see some stratification. 

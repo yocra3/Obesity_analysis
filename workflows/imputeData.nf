@@ -58,6 +58,7 @@ process adaptAnnotation{
 process fulldatatableTotped {
 
   tag "$cohort"
+  label 'process_long'
 
   input:
   set val(cohort), file(geno) from ch_FullDataTable
@@ -106,11 +107,7 @@ process fulldatatableTotped {
   sed -i 's/NC/0\t0/g' genomat.filt
   paste annot.txt genomat.filt > cohort.tped
 
-
   awk -F'\\t' 'BEGIN { OFS = FS } {print \$1, \$1, 0, 0, 0, 0}' samps.filt > cohort.tfam
-
-
-
   """
 }
 
