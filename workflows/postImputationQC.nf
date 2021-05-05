@@ -13,7 +13,7 @@ if (params.inputTable) {
             .splitCsv(sep: "\t")
             .map { row -> [ row[0], file(row[1], checkIfExists: true)]}
             .ifEmpty { exit 1, "params.inputTable was empty - no input files supplied" }
-            .set { ch_Imputation_Folder }
+            .into { ch_Imputation_Folder;  ch_Imputation_FolderInfo}
   } else { exit 1, "--inputTable should be text file with the cohort name and a path to the folder with imputation files" }
 
 // Add workflow info
@@ -24,6 +24,76 @@ Date: $date
 Git info: $workflow.repository - $workflow.revision [$workflow.commitId]
 Cmd line: $workflow.commandLine
 """
+
+
+
+process collapseInfo {
+
+  tag "$cohort"
+
+  input:
+  set val(cohort), path("info") from ch_Imputation_FolderInfo
+
+  output:
+  file("${cohort}.info") into ch_collapsed_info
+
+  script:
+  """
+  for i in info/*.info.gz
+  do
+    bgzip -cd \$i | cut -f1,7 >> ${cohort}.info
+  done
+
+  """
+}
+
+
+process mergeInfo {
+
+  publishDir "${params.outdir}/postImputation/stats/${date}", mode: 'copy'
+
+  input:
+  file(info) from ch_collapsed_info.collect()
+
+  output:
+  file("combined.info") into ch_combined_info
+
+  script:
+  """
+  i=0
+  for f in *.info
+  do
+    if [ \$i -eq 0 ]
+    then
+      sort \$f > combined.info
+    else
+      join -j1  combined.info <(sort \$f) > tmp.txt
+      cat tmp.txt > combined.info
+    fi
+    i=\$(( i + 1 ))
+  done
+
+  """
+}
+
+process filterGoodRsqSNPs {
+
+  input:
+  file(info) from ch_combined_info
+
+  output:
+  file("rsqRange.snps") into ch_rsq_snps
+
+  script:
+  """
+  awk '{min=\$2;max=\$2;for(i=2;i<=NF;i++){\
+      if(\$i<min) min=\$i;\
+      if(\$i>max) max=\$i;}\
+      if (max-min<0.2) print \$1}' $info > rsqRange.snps
+  """
+}
+
+
 
 process processSampleSheet {
 
@@ -106,13 +176,33 @@ process getCommonVariants {
   file(vcf) from ch_vcf_ini
 
   output:
+  file("merged.imputation.ini.vcf.gz") into ch_mergeini_vcf
+
+  script:
+  """
+  bcftools filter -i 'N_MISSING < 10' $vcf -o merged.imputation.ini.vcf.gz -O z
+  """
+}
+
+
+process removeVariantsLowRsq {
+
+
+  label 'process_long'
+
+  input:
+  file(vcf) from ch_mergeini_vcf
+  file(snps) from ch_rsq_snps
+
+  output:
   file("merged.imputation.vcf.gz") into ch_vcf_tabix, ch_merge_vcf
 
   script:
   """
-  bcftools filter -i 'N_MISSING < 10' $vcf -o merged.imputation.vcf.gz -O z
+  bcftools view -i'ID=@$snps' $vcf -o merged.imputation.vcf.gz -O z
   """
 }
+
 
 process indexVCFmerged {
 
@@ -169,6 +259,9 @@ process plinkStatistics {
 
 
 process runPeddy {
+
+  // Use older version of container with a working version of peddy
+  container = 'yocra3/obesity_analysis:1.2'
 
   label 'process_medium'
 

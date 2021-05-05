@@ -39,3 +39,11 @@ do
     unzip -P `cat results/postImputation/MichiganOutput/$fold/pass` results/postImputation/MichiganOutput/$fold/local/$file -d results/postImputation/MichiganOutput/$new
   done
 done
+
+
+## Viva la Familia. Use 1000 Genomes
+bin/imputationbot impute --files $vcf/VLF/2021-04-30 --refpanel 1000g-phase-3-v5 --r2Filter 0.3 --population amr --name VLF
+bin/imputationbot download job-20210430-063418-809 --password 3CebxjK2zm6EAW --output results/postImputation/MichiganOutput/
+
+mkdir results/postImputation/MichiganOutput/VLF
+mv results/postImputation/MichiganOutput/job-20210430-063418-809-VLF/local/*.gz results/postImputation/MichiganOutput/VLF/

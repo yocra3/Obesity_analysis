@@ -6,13 +6,14 @@
 date = java.time.LocalDate.now()
 
 plink = [file("${params.plink_prefix}.bed"), file("${params.plink_prefix}.bim"), file("${params.plink_prefix}.fam")]
-Channel.fromPath(plink).into{ch_plink_filter; ch_plink_freqs; ch_plink_assoc; ch_plink_depict; ch_plink_assoc_prs}
+Channel.fromPath(plink).into{ch_plink_filter; ch_plink_freqs; ch_plink_assoc; ch_plink_depict; ch_plink_assoc_cohort; ch_plink_patho}
 Channel.fromPath(["${params.gwas_vcf_file}", "${params.gwas_vcf_file}.tbi"]).into{ch_vcf1; ch_vcf2; ch_vcf3; ch_vcfburden; ch_vcf_inv}
 
 pcs = file("${params.pcs_file}")
 prs = file("${params.prs_file}")
 phenotype = plink[2]
 
+samples = file("${params.sample_excel}")
 
 Channel.fromPath(["${params.snps_1000G}", "${params.snps_1000G}.tbi"]).set{snps_1000G}
 flat_gene = file("${params.flat_gene}")
@@ -20,6 +21,20 @@ depictFold = file("${params.depictFold}")
 depictFoldData = file("${params.depictFold}/data/")
 depictFoldLocus = file("${params.depictFold}/LocusGenerator/")
 depictFoldDepict = file("${params.depictFold}/Depict/")
+
+if (params.cohortTable) {
+      Channel
+            .fromPath(params.cohortTable)
+            .splitCsv(sep: "\t")
+            .map { row -> [ row[0], file(row[1], checkIfExists: true)]}
+            .ifEmpty { exit 1, "params.cohortTable was empty - no input files supplied" }
+            .branch{
+              cases: it[0] != "Epicuro"
+              controls: it[0] == "Epicuro"
+            }
+            .set { ch_cohort_fams }
+  } else { exit 1, "--cohortTable should be text file with the cohort name and a path to the folder with imputation files" }
+
 
 // Add workflow info
 workflowInfo = """
@@ -37,7 +52,7 @@ process createCovars {
   file(pcs) from pcs
 
   output:
-  file("covars.txt") into ch_covars, ch_covars_burden, ch_covars_inv, ch_covars_prs
+  file("covars.txt") into ch_covars, ch_covars_inv, ch_covars_cohorts, ch_covars_patho
 
   script:
   """
@@ -192,6 +207,87 @@ process runDepict {
   """
 }
 
+process splitEpicuro {
+
+  input:
+  set val(cohort), file(fam) from ch_cohort_fams.controls
+
+
+  output:
+  set val("Obesity1"), file("subsetaa") into ch_epicuro_sets1
+  set val("Obesity2"), file("subsetab") into ch_epicuro_sets2
+  set val("Obesity3"), file("subsetac") into ch_epicuro_sets3
+
+  script:
+  """
+  split -l\$((`wc -l < $fam`/3 + 1)) $fam subset
+  """
+}
+ch_epicuro_sets = ch_epicuro_sets1.concat(ch_epicuro_sets2.concat(ch_epicuro_sets3))
+ch_cohorts = ch_epicuro_sets.join(ch_cohort_fams.cases)
+
+
+process runCohortGWASplink {
+
+  publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
+
+  label 'process_medium'
+  label 'process_long'
+
+  input:
+  set file("set.bed"), file("set.bim"), file("set.fam") from ch_plink_assoc_cohort.collect()
+  set val(cohort), file(fam1), file(fam2) from ch_cohorts
+  file(covars) from ch_covars_cohorts
+
+  output:
+  set val(cohort), file("Obesity.GWAS.plink.${cohort}.assoc.logistic") into plink_assoc_cohort
+
+  script:
+  """
+  cut -d ' ' -f 1,2,5-14 $covars > cov.txt
+  cat $fam1 > selsamps.txt
+  cat $fam2 >> selsamps.txt
+  cut -d ' ' -f 2 selsamps.txt | sed 's/^/0\t/g'  >  selsamps
+  plink --bfile set --keep selsamps --logistic --covar cov.txt --out Obesity.GWAS.plink.${cohort}
+  """
+}
+
+
+process filterCohortGWASplink {
+
+  input:
+  set val(cohort), file(assoc) from plink_assoc_cohort
+
+  output:
+  set val(cohort), file("Obesity.GWAS.plink.${cohort}.assoc.SNPs.logistic") into plink_assoc_cohort_comp
+
+  script:
+  """
+  head -n1 $assoc > Obesity.GWAS.plink.${cohort}.assoc.SNPs.logistic
+  grep ADD $assoc >> Obesity.GWAS.plink.${cohort}.assoc.SNPs.logistic
+  """
+}
+
+
+process compressCohortGWASplink {
+
+  publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
+
+  input:
+  set val(cohort), file(assoc) from plink_assoc_cohort_comp
+
+  output:
+  file("Obesity.GWAS.${cohort}.locuszoom.input.gz")
+
+  script:
+  """
+  tail -n +2 $assoc | tr -s ' ' '\t' | cut -f 2-10  > tmp.txt
+  cut -f2 tmp.txt | awk -F ":" 'BEGIN {OFS = "\t"} {print \$3, \$4}' > alleles.txt
+  paste tmp.txt alleles.txt | bgzip -c  > Obesity.GWAS.${cohort}.locuszoom.input.gz
+  """
+}
+
+
 process computeFreqs {
 
   input:
@@ -309,5 +405,76 @@ process computePRS {
   script:
   """
   plink --vcf $vcf --const-fid --score $prs sum --out obesity
+  """
+}
+
+process getPathoSamples {
+
+  input:
+  file(samples)
+
+  output:
+  file("pathogenicSamps.txt") into ch_path_samps
+
+  script:
+  """
+  selectSamplesWithVariants.R $samples
+  """
+}
+
+process runGWASplinkPatho {
+
+  publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
+
+  label 'process_medium'
+  label 'process_long'
+
+  input:
+  set file("set.bed"), file("set.bim"), file("set.fam") from ch_plink_patho.collect()
+  file(covars) from ch_covars_patho
+  file(patho_samps) from ch_path_samps
+
+  output:
+  file("Obesity.GWAS.plink.nonPatho.assoc.logistic") into plink_assoc_patho
+
+  script:
+  """
+  cut -d ' ' -f 1,2,5-14 $covars > cov.txt
+  plink --bfile set --logistic --remove $patho_samps --covar cov.txt --out Obesity.GWAS.plink.nonPatho
+  """
+}
+
+
+process filterGWASpatho {
+
+  input:
+  file(assoc) from plink_assoc_patho
+
+  output:
+  file("Obesity.GWAS.plink.nonPatho.assoc.SNPs.logistic") into plink_assoc_patho_comp
+
+  script:
+  """
+  head -n1 $assoc > Obesity.GWAS.plink.nonPatho.assoc.SNPs.logistic
+  grep ADD $assoc >> Obesity.GWAS.plink.nonPatho.assoc.SNPs.logistic
+  """
+}
+
+
+process compressGWASpatho {
+
+  publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
+
+  input:
+  file(assoc) from plink_assoc_patho_comp
+
+  output:
+  file("Obesity.GWAS.plink.nonPatho.locuszoom.input.gz")
+
+  script:
+  """
+  tail -n +2 $assoc | tr -s ' ' '\t' | cut -f 2-10  > tmp.txt
+  cut -f2 tmp.txt | awk -F ":" 'BEGIN {OFS = "\t"} {print \$3, \$4}' > alleles.txt
+  paste tmp.txt alleles.txt | bgzip -c  > Obesity.GWAS.plink.nonPatho.locuszoom.input.gz
   """
 }

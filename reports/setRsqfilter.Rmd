@@ -1,0 +1,261 @@
+---
+title: "Evaluate Rsq filter"
+author: "Carlos Ruiz"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+
+In this report, we will explore whether the associations reported in the GWAS might be influenced by some technical factors and how to solve it. 
+
+## Load data and libraries 
+
+```{r}
+library(kableExtra)
+library(tidyverse)
+library(GenomicRanges)
+library(cowplot)
+library(VariantAnnotation)
+library(matrixStats)
+```
+
+First, we will load the GWAS results.
+
+```{r}
+getGWASTab <- function(path){
+   tab <- read_table2(path, col_names = FALSE)
+colnames(tab) <- c("CHR", "SNP", "BP", "ALLELE", "MODEL", "SAMPS", "BETA", "SE", "P", "REF", "ALT") 
+    subset(tab, !is.na(P))
+}
+single.snp <- getGWASTab("../results/associations/GWAS/2021-04-20/Obesity.GWAS.locuszoom.input.gz")
+
+```
+# Imputation results
+
+## Imputation summary
+
+We set as significant variants with a p-value < 5e-8. We explored whether some statistics of the imputations for these variants:
+
+```{r}
+sigSNPs <- subset(single.snp, P < 5e-8)$SNP
+getSNPimputationStatus <- function(cohort, selSNPs){
+    
+    path <- "../results/postImputation/MichiganOutput/"
+    chrom <- c(1:22, "X")
+    infoL <- lapply(chrom, function(chr){
+        a <- read_table2(paste0(path, cohort, "/chr", chr, ".info.gz"))
+        subset(a, SNP %in% selSNPs)
+    })
+    infoDf <- Reduce(rbind, infoL)
+    infoDf$Cohort <- cohort
+    infoDf
+}
+info.list <- lapply(c("Epicuro", paste0("Obesity", 1:3)), 
+                    getSNPimputationStatus, selSNPs = sigSNPs)
+info.df <- Reduce(rbind, info.list)
+table(info.df$Genotyped, info.df$Cohort)
+```
+
+Most of the significant SNPs were imputed. Nonetheless, the proportion of genotypes SNPs is higher in Epicuro, possibly due to its large array size.
+
+```{r}
+info.df %>%
+    ggplot(aes(x = Cohort, y = Rsq, color = Cohort)) +
+    geom_boxplot() +
+    theme_bw()
+info.df %>%
+    group_by(Cohort) %>%
+    summarize(median_Rsq = median(Rsq))
+pairwise.wilcox.test(info.df$Rsq, info.df$Cohort)
+```
+
+Significant SNPs have larger median imputation quality in Epicuro and Obesity1 than in Obesity2 and Obesity3. 
+
+```{r}
+info.df %>%
+    ggplot(aes(x = Cohort, y = as.numeric(EmpRsq), color = Cohort)) +
+    geom_boxplot() +
+    theme_bw()
+info.df %>%
+    group_by(Cohort) %>%
+    summarize(median_LooRsq = median(as.numeric(EmpRsq), na.rm = TRUE))
+pairwise.wilcox.test(as.numeric(info.df$EmpRsq ), info.df$Cohort)
+```
+
+When comparing the empirical Rsq, the differences between the cohorts are reduced.
+
+
+```{r}
+ggplot(info.df, aes(x = MAF, y = Rsq)) +
+    geom_point() +
+    geom_smooth(method='lm') +
+    theme_bw() +
+    facet_wrap(~ Cohort)
+info.df %>%
+    group_by(Cohort) %>%
+    summarize(cor = cor(Rsq, MAF),
+              cor.P = cor.test(Rsq, MAF)$p.value)
+```
+There is a strong correlation between MAF and Rsq in Epicuro. In the other cohorts, the correlation is less strong. 
+
+## Imputation quality in associations
+
+Next, we explored possible associations between the imputation quality Rsq and the associations.
+
+```{r}
+info.tmp <- cbind(info.df %>%
+                      dplyr::select(SNP, Rsq, Cohort) %>%
+                      mutate(Cohort = paste0("Rsq.", Cohort)) %>%
+                      spread(Cohort, Rsq),  
+                  info.df %>%
+                      dplyr::select(SNP, EmpRsq, Cohort) %>%
+                      mutate(Cohort = paste0("EmpRsq", Cohort)) %>%
+                      spread(Cohort, EmpRsq))
+
+sig.beta <- single.snp %>%
+    filter(SNP %in% sigSNPs) %>%
+    dplyr::select(SNP, CHR, BP, BETA, P) %>%
+  mutate(P = -log10(P)) %>%
+    left_join(dplyr::select(info.df, SNP, Rsq, Cohort) %>%
+                  mutate(Cohort = paste0("Rsq.", Cohort)) %>%
+                  spread(Cohort, Rsq), 
+              by = "SNP")
+```
+
+
+```{r}
+combP.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "P")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combP.l, ncol = 2)
+diffcombP.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+       cor.test(formula(paste0("~ P + Rsq.",  x)), data =  sig.beta)
+})
+names(diffcombP.l) <- c("Epicuro", paste0("Obesity", 1:3))
+diffcombP.l
+```
+
+There is almost no correlation between the Rsq of Epicuro and the P value of the significant SNPs in the main analysis. On the other hand, we observed a significant correlation between the GWAS P-values and the imputation quality for the case cohorts, suggesting that variants with better imputation are also the variants we found associated with the disease. 
+
+```{r}
+combBeta.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "BETA")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        scale_y_log10(name = "OR") +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combBeta.l, ncol = 2)
+diffcombBeta.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+       cor.test(formula(paste0("~ log(BETA) + Rsq.",  x)), data =  sig.beta)
+})
+names(diffcombBeta.l) <- c("Epicuro", paste0("Obesity", 1:3))
+diffcombBeta.l
+```
+
+We observed a correlation between the Rsq and the OR of the combined model. Thus, higher imputation quality in Epicuro are correlated with ORs < 1, indicating that the alternative allele is more frequent in this cohort than in the rest. On the other hand, higher imputation qualities in case cohorts are correlated with ORs > 1, suggesting that the alternative allele in more frequent in the cases than in Epicuro. This results might suggest that variants with low imputation scores are underestimating the proportion of the reference allele. 
+
+## Rsq range to reduce false positives
+
+Based on the results of the previous section, we explored how to reduce the false positive associations caused by a different imputation quality. In this section, we explored the Rsq range, or the difference between the maximum and minimum Rsq for a variant in the different cohorts.
+
+```{r}
+sig.beta %>%
+    mutate(Rsq.range = dplyr::select(., Rsq.Epicuro, Rsq.Obesity1, Rsq.Obesity2, Rsq.Obesity3) %>% data.matrix() %>% apply(., 1, function(x) max(x) - min(x))) %>%
+    ggplot(aes(x = Rsq.range, y = BETA)) +
+    geom_point(alpha = 0.3) +
+    geom_hline(yintercept = c(10, 0.1), linetype = "dashed") +
+    geom_smooth(method='lm') +
+    scale_y_log10(name = "OR") +
+    theme_bw() 
+
+```
+This plot compares the ORs in the full cohort with the range in Rsq between the cohorts. We observe that variants with extreme ORs (OR > 10 or OR < 1) are more frequent for variants with larger ranges. 
+
+We explored how the Rsq range affects the correlation between Rsq and OR.
+
+```{r}
+sig.beta <-   sig.beta %>%
+    mutate(Rsq.range = dplyr::select(., Rsq.Epicuro, Rsq.Obesity1, Rsq.Obesity2, Rsq.Obesity3) %>% data.matrix() %>% apply(., 1, function(x) max(x) - min(x)), 
+           Rsq.rangecat = cut(Rsq.range, breaks = c(0, 0.2, 0.4, 2), 
+                              labels = c("<0.2", "0.2-0.4", ">0.4"))) 
+combBeta1.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "BETA")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        scale_y_log10(name = "OR") +
+        facet_grid(. ~ Rsq.rangecat) +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combBeta1.l, ncol = 2)
+```
+
+When the Rsq range is lower than 0.2, we lose the correlation between the OR and the imputations Rsq.
+
+
+
+```{r}
+combBeta2.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        filter(Rsq.rangecat == "<0.2") %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "BETA")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        scale_y_log10(name = "OR") +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combBeta2.l, ncol = 2)
+diffcombBeta2.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+       cor.test(formula(paste0("~ log(BETA) + Rsq.",  x)), 
+                data =  sig.beta, Rsq.rangecat == "<0.2")
+})
+names(diffcombBeta2.l) <- c("Epicuro", paste0("Obesity", 1:3))
+diffcombBeta2.l
+```
+
+When selecting only variants whose Rsq range is smaller than 0.2, we lose any correlation between Rsq and the OR and the ORs are not as extreme. 
+
+
+```{r}
+combP2.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+    filter(Rsq.rangecat == "<0.2") %>%
+    ggplot(aes_string(x = paste0("Rsq.", x), y = "P")) +
+    geom_point(alpha = 0.3) +
+    geom_smooth(method='lm') +
+    theme_bw() +
+    ggtitle(x)
+})
+plot_grid(plotlist = combP2.l, ncol = 2)
+diffcombP2.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+       cor.test(formula(paste0("~ P + Rsq.",  x)), data =  sig.beta,
+                subset = Rsq.rangecat == "<0.2")
+})
+names(diffcombP2.l) <- c("Epicuro", paste0("Obesity", 1:3))
+diffcombP2.l
+```
+
+When removing variants with Rsq range < 0.2, we have a positive correlation between the association p-value and the Rsq in all the cohorts. This correlation suggest that variants that are better imputed are having a more clear association. `
+
+Thus, we decided to remove all the variants where the Rsq range (difference between the maximum and minimum Rsq) was larger than 0.2.
+
+
+
+
+
+

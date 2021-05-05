@@ -28,3 +28,6 @@ RUN R -e 'BiocManager::install(c("Biostrings", "snpStats", "VariantAnnotation", 
 
 # Install scoreInvHap
 RUN R -e 'devtools::install_github("isglobal-brge/scoreInvHap")'
+
+# Install libcurl for liftOver
+RUN apt-get install -q -y libcurl4

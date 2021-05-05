@@ -1,0 +1,156 @@
+abr.-19 17:19:50.944 [main] DEBUG nextflow.config.ConfigBuilder - Found config local: /home/SHARED/PROJECTS/Obesity_analysis/nextflow.config
+abr.-19 17:19:50.947 [main] DEBUG nextflow.config.ConfigBuilder - Parsing config file: /home/SHARED/PROJECTS/Obesity_analysis/nextflow.config
+abr.-19 17:19:50.964 [main] DEBUG nextflow.config.ConfigBuilder - Applying config profile: `standard`
+abr.-19 17:20:40.533 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: 5821d524-ec70-4d05-a598-cf9b4cdb4535
+abr.-19 17:20:40.535 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: furious_cuvier
+abr.-19 17:20:40.535 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:20:40.568 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:20:40.612 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:20:40.614 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:20:40.768 [Thread-2] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:20:40.865 [Thread-2] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:20:40.979 [Thread-2] DEBUG nextflow.Session - Session await
+abr.-19 17:20:40.979 [Thread-2] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:20:40.979 [Thread-2] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:20:41.001 [Thread-2] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:20:41.013 [Thread-2] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:20:41.017 [Thread-2] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
+abr.-19 17:20:55.347 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: 88bc5116-5f8e-425a-bf0b-d8547d032e97
+abr.-19 17:20:55.347 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: grave_rubens
+abr.-19 17:20:55.347 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:20:55.348 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:20:55.350 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:20:55.350 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:20:55.368 [Thread-4] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:20:55.394 [Thread-4] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:20:55.402 [Thread-4] DEBUG nextflow.Session - Session await
+abr.-19 17:20:55.402 [Thread-4] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:20:55.402 [Thread-4] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:20:55.403 [Thread-4] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:20:55.406 [Thread-4] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:20:55.406 [Thread-4] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
+abr.-19 17:21:02.963 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: 8cf4a066-cd12-4dc4-822d-466265cc2398
+abr.-19 17:21:02.963 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: backstabbing_picasso
+abr.-19 17:21:02.963 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:21:02.963 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:21:02.965 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:21:02.966 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:21:02.980 [Thread-6] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:21:03.004 [Thread-6] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:21:03.008 [Thread-6] DEBUG nextflow.Session - Session await
+abr.-19 17:21:03.008 [Thread-6] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:21:03.008 [Thread-6] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:21:03.008 [Thread-6] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:21:03.010 [Thread-6] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:21:03.011 [Thread-6] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
+abr.-19 17:21:09.427 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: 701812c0-2124-45c9-99d4-6cd8df00ed86
+abr.-19 17:21:09.427 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: agitated_gilbert
+abr.-19 17:21:09.427 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:21:09.428 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:21:09.429 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:21:09.430 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:21:09.443 [Thread-8] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:21:09.466 [Thread-8] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:21:09.470 [Thread-8] DEBUG nextflow.Session - Session await
+abr.-19 17:21:09.470 [Thread-8] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:21:09.470 [Thread-8] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:21:09.471 [Thread-8] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:21:09.473 [Thread-8] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:21:09.473 [Thread-8] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
+abr.-19 17:21:32.995 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: f39d5631-d9c9-4bb0-9ee5-b18bb2a454e9
+abr.-19 17:21:32.996 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: pedantic_becquerel
+abr.-19 17:21:32.996 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:21:32.996 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:21:32.997 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:21:32.998 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:21:33.009 [Thread-10] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:21:33.034 [Thread-10] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:21:47.644 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: af26e718-fa61-4386-ad79-e9ac79db1d81
+abr.-19 17:21:47.644 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: berserk_picasso
+abr.-19 17:21:47.644 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:21:47.644 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:21:47.646 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:21:47.646 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:21:47.661 [Thread-12] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:21:47.683 [Thread-12] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:21:47.696 [Thread-12] DEBUG nextflow.Session - Session await
+abr.-19 17:21:47.697 [Thread-12] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:21:47.697 [Thread-12] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:21:47.702 [Thread-12] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:21:47.704 [Thread-12] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:21:47.704 [Thread-12] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
+abr.-19 17:21:57.092 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: 5f614ae0-180d-481c-80c5-5e77ca3e2a39
+abr.-19 17:21:57.092 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: agitated_brown
+abr.-19 17:21:57.092 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:21:57.093 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:21:57.094 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:21:57.095 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:21:57.107 [Thread-14] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:21:57.146 [Thread-14] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:21:57.150 [Thread-14] DEBUG nextflow.Session - Session await
+abr.-19 17:21:57.150 [Thread-14] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:21:57.150 [Thread-14] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:21:57.152 [Thread-14] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:21:57.154 [Thread-14] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:21:57.154 [Thread-14] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
+abr.-19 17:22:09.028 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: 76801497-990e-4105-806f-ab7b0c67a809
+abr.-19 17:22:09.029 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: jolly_ptolemy
+abr.-19 17:22:09.029 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:22:09.029 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:22:09.031 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:22:09.031 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:22:09.044 [Thread-16] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:22:09.067 [Thread-16] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:22:09.072 [Thread-16] DEBUG nextflow.Session - Session await
+abr.-19 17:22:09.072 [Thread-16] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:22:09.072 [Thread-16] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:22:09.076 [Actor Thread 5] ERROR nextflow.extension.OperatorEx - @unknown
+java.util.NoSuchElementException: Cannot access first() element from an empty List
+	at org.codehaus.groovy.runtime.DefaultGroovyMethods.first(DefaultGroovyMethods.java:10094)
+	at org.codehaus.groovy.runtime.DefaultGroovyMethods.head(DefaultGroovyMethods.java:10176)
+	at org.codehaus.groovy.runtime.dgm$388.invoke(Unknown Source)
+	at org.codehaus.groovy.runtime.callsite.PojoMetaMethodSite$PojoMetaMethodSiteNoUnwrapNoCoerce.invoke(PojoMetaMethodSite.java:247)
+	at org.codehaus.groovy.runtime.callsite.PojoMetaMethodSite.call(PojoMetaMethodSite.java:56)
+	at org.codehaus.groovy.runtime.callsite.AbstractCallSite.call(AbstractCallSite.java:130)
+	at nextflow.extension.OperatorEx$_collate_closure34.doCall(OperatorEx.groovy:1088)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:566)
+	at org.codehaus.groovy.reflection.CachedMethod.invoke(CachedMethod.java:107)
+	at groovy.lang.MetaMethod.doMethodInvoke(MetaMethod.java:323)
+	at org.codehaus.groovy.runtime.metaclass.ClosureMetaClass.invokeMethod(ClosureMetaClass.java:263)
+	at groovy.lang.MetaClassImpl.invokeMethod(MetaClassImpl.java:1026)
+	at groovy.lang.Closure.call(Closure.java:412)
+	at groovyx.gpars.dataflow.operator.DataflowOperatorActor.startTask(DataflowOperatorActor.java:120)
+	at groovyx.gpars.dataflow.operator.DataflowOperatorActor.onMessage(DataflowOperatorActor.java:108)
+	at groovyx.gpars.actor.impl.SDAClosure$1.call(SDAClosure.java:43)
+	at groovyx.gpars.actor.AbstractLoopingActor.runEnhancedWithoutRepliesOnMessages(AbstractLoopingActor.java:293)
+	at groovyx.gpars.actor.AbstractLoopingActor.access$400(AbstractLoopingActor.java:30)
+	at groovyx.gpars.actor.AbstractLoopingActor$1.handleMessage(AbstractLoopingActor.java:93)
+	at groovyx.gpars.util.AsyncMessagingCore.run(AsyncMessagingCore.java:132)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)
+	at java.base/java.lang.Thread.run(Thread.java:834)
+abr.-19 17:22:09.088 [Actor Thread 5] DEBUG nextflow.Session - Session aborted -- Cause: Cannot access first() element from an empty List
+abr.-19 17:22:09.100 [Actor Thread 5] DEBUG nextflow.Session - The following nodes are still active:
+  [operator] collate
+  [operator] view
+
+abr.-19 17:22:09.102 [Thread-16] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:22:09.103 [Thread-16] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:22:09.104 [Thread-16] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
+abr.-19 17:22:29.012 [AWT-EventQueue-0] DEBUG nextflow.Session - Session uuid: afc2dcba-b842-4748-aa96-c4fd193b3364
+abr.-19 17:22:29.012 [AWT-EventQueue-0] DEBUG nextflow.Session - Run name: adoring_babbage
+abr.-19 17:22:29.013 [AWT-EventQueue-0] DEBUG nextflow.Session - Executor pool size: 20
+abr.-19 17:22:29.013 [AWT-EventQueue-0] DEBUG nextflow.Session - Work-dir: /home/SHARED/PROJECTS/Obesity_analysis/work [ext2/ext3]
+abr.-19 17:22:29.014 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: TowerFactory
+abr.-19 17:22:29.015 [AWT-EventQueue-0] DEBUG nextflow.Session - Observer factory: DefaultObserverFactory
+abr.-19 17:22:29.026 [Thread-18] DEBUG nextflow.Session - Session start invoked
+abr.-19 17:22:29.046 [Thread-18] DEBUG nextflow.Session - Workflow process names [dsl1]: 
+abr.-19 17:22:29.050 [Thread-18] DEBUG nextflow.Session - Session await
+abr.-19 17:22:29.050 [Thread-18] DEBUG nextflow.Session - Session await > all process finished
+abr.-19 17:22:29.050 [Thread-18] DEBUG nextflow.Session - Session await > all barriers passed
+abr.-19 17:22:29.052 [Thread-18] DEBUG nextflow.trace.WorkflowStatsObserver - Workflow completed > WorkflowStats[succeededCount=0; failedCount=0; ignoredCount=0; cachedCount=0; pendingCount=0; submittedCount=0; runningCount=0; retriesCount=0; abortedCount=0; succeedDuration=0ms; failedDuration=0ms; cachedDuration=0ms;loadCpus=0; loadMemory=0; peakRunning=0; peakCpus=0; peakMemory=0; ]
+abr.-19 17:22:29.054 [Thread-18] DEBUG nextflow.CacheDB - Closing CacheDB done
+abr.-19 17:22:29.054 [Thread-18] DEBUG nextflow.util.SpuriousDeps - AWS S3 uploader shutdown
