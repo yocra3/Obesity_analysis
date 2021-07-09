@@ -1,0 +1,623 @@
+---
+title: "Associations"
+author: "Carlos Ruiz"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+
+In this report, we will show the different associations performed.
+
+```{r}
+library(qqman)
+library(kableExtra)
+library(tidyverse)
+library(GenomicRanges)
+library(gwascat)
+library(SNPassoc)
+library(epiDisplay)
+library(cowplot)
+library(VariantAnnotation)
+library(matrixStats)
+```
+
+# GWAS
+
+First, we run a GWAS analysis with the imputed SNPs passing the QC. We adjusted all the models for sex and 10 first genetic principal components (PCs). We run two different tests: a single test and a group test per gene.
+
+## Single test
+
+The single test is a classical GWAS, where all the variants are tested against the phenotype. We used a Wald test to assess the associations significance.
+
+```{r}
+lambdaClayton <- function(x, trim = 0.5) {
+    xx <- qnorm(1-x)^2
+    N <- length(xx)
+    obsvd <- sort(xx, na.last=NA)
+    expctd <- qchisq(p = (1:N)/(N + 1), 1)
+    Nu <- floor(trim * N)
+    lambda <- mean(obsvd[1:Nu])/mean(expctd[1:Nu])
+    lambda
+}
+```
+
+```{r}
+getGWASTab <- function(path){
+   tab <- read_table2(path, col_names = FALSE)
+colnames(tab) <- c("CHR", "SNP", "BP", "ALLELE", "MODEL", "SAMPS", "BETA", "SE", "P", "REF", "ALT") 
+    subset(tab, !is.na(P))
+}
+single.snp <- getGWASTab("../results/associations/GWAS/2021-04-26/Obesity.GWAS.locuszoom.input.gz")
+
+```
+
+```{r}
+qq(single.snp$P)
+lambdaClayton(single.snp$P)
+```
+
+We do not observe inflation in the GWAS results
+
+```{r}
+manhattan(single.snp)
+```
+
+We observed `r sum(single.snp$P < 5e-8)` SNPs with genome-wide significant association (P < 5e-8) with the extreme obesity, distributed in chromosomes 1, 6, 7, 12, 16, 17, 18, 19, 22 and 23.
+
+We run two approaches to define loci:
+
+- Clumping with plink: plink generated loci starting by SNPs with genome-wide significance (P < 5.e-8). The loci were extended to include all nearby SNPs with P < 1e-5 and in high LD.
+- Depict: depict based on SNPs with P < 1e-5. Performs a similar clustering but also includes nearby genes.
+
+```{r}
+lociplink <- read_table2("../results/associations/GWAS/2021-04-26/Obesity.GWAS.plink.clumped",
+                     progress = TRUE, col_names = TRUE)
+locidepict <- read_delim("../results/associations/GWAS/2021-04-26/assoc_loci.txt",
+                     progress = TRUE, col_names = TRUE, comment = "#", delim = "\t")
+
+## Create range with SNPs in SP2
+getNum <- function(SP2){
+    if (SP2 == "NONE"){
+        return(NA)
+    }
+    a <- strsplit(SP2, ":")[[1]]
+    as.numeric(a[seq(2, length(a), 3)])
+}
+    
+lociplink.range <- lociplink %>%
+    mutate(minClump = sapply(SP2, function(x) min(getNum(x))),
+           maxClump = sapply(SP2, function(x) max(getNum(x))),
+           start = pmin(minClump, BP, na.rm = TRUE), 
+           end = pmax(minClump, BP, na.rm = TRUE)) 
+lociplink.range$id <- paste0("plink", seq_len(nrow(lociplink.range)))
+plinkGR <- makeGRangesFromDataFrame(lociplink.range, start.field = "BP", end.field = "BP")
+plinkGR$id <- paste0("plink", seq_len(length(plinkGR)))
+
+locidepict$id <- paste0("depict", seq_len(nrow(locidepict)))
+depictGR <- makeGRangesFromDataFrame(locidepict)
+depictGR$id <- paste0("depict", seq_len(length(depictGR)))
+ov <- findOverlaps(plinkGR, depictGR)
+plink.un <- lociplink.range[-from(ov), ]
+comGR <- c(plinkGR[-from(ov)], depictGR[unique(to(ov))])
+```
+
+Overall, we found `r length(plinkGR)` loci with plink and `r length(depictGR)` loci with depict. After combining both sets, and discarding depict loci without genome-wide significant SNPs, we have a total  `r length(comGR)` loci with genome-wide significance.
+
+Next, we removed those loci owith an overlap > 30% with segmental duplications. 
+
+```{r}
+LCRs <- read.table("/home/SHARED/DATA/REFERENCES/GRCh37/SegmentalDups/RLCRs_chrNCBI_no_Repeat_Masker.txt", comment.char = "", header = FALSE, as.is = TRUE)
+LCRGR <- makeGRangesFromDataFrame(LCRs, seqnames.field = "V1",
+                                  start.field = "V2", end.field = "V3")
+
+over.LCR <- findOverlaps(comGR, LCRGR)
+comGR.filt <- comGR[-unique(from(over.LCR))]
+good <- sapply(unique(from(over.LCR)), function(i){
+    
+    segDup.sel <-  LCRGR[to(ov)[from(ov) == i]]
+    sum(width( segDup.sel)) < 0.3*width(comGR[i])
+})
+comGR.filt <- c(comGR.filt, comGR[unique(from(over.LCR))][good])
+```
+
+We got a final set of `r length(comGR.filt)` loci with significant genome-wide association with extreme obesity and outside segmental duplications regions. 
+
+```{r, cache = TRUE}
+options(timeout = 3600)
+curgwas <- makeCurrentGwascat(genome = "GRCh37")
+bmi.gwas <- subsetByTraits(curgwas, tr = c("Body mass index", "Obesity and osteoporosis",
+                                           "Overweight status",
+                                           "Birth weight", 
+                                           "Underweight status",
+                                           "Birth weight variance",
+                                           "Offspring birth weight",
+                                           "Obesity", "Obesity (extreme)",
+                                           "Obesity (early onset extreme)", 
+                                           "Obesity-related traits", "Childhood obesity"))
+```
+Next, we checked the overlap with hits associated with obesity or body mass index in the GWAS catalog. We used a window of 500Kb to identify matches with previous loci. 
+
+```{r}
+ov.nogwas <- findOverlaps(comGR.filt + 500e3, bmi.gwas)
+comGR.nogwas <- comGR.filt[-unique(from(ov.nogwas))]
+```
+
+`r length(unique(from(ov.nogwas)))` loci were previously described in GWAS catalog while `r length(comGR.nogwas)` loci are novel. We will explore these loci with further detail. 
+
+```{r}
+plink.new <- subset(lociplink.range, id %in% comGR.nogwas$id)
+depict.new <- subset(locidepict, id %in% comGR.nogwas$id)
+
+```
+### Stratification by cohort
+
+```{r}
+obe1.snp <- getGWASTab("../results/associations/GWAS/2021-04-20/Obesity.GWAS.Obesity1.locuszoom.input.gz")
+obe2.snp <- getGWASTab("../results/associations/GWAS/2021-04-20/Obesity.GWAS.Obesity2.locuszoom.input.gz")
+obe3.snp <- getGWASTab("../results/associations/GWAS/2021-04-20/Obesity.GWAS.Obesity3.locuszoom.input.gz")
+```
+
+```{r}
+sigSNPs <- subset(single.snp, P < 5e-8)$SNP
+
+par(mfrow = c(3, 1))
+manhattan(obe1.snp, main = "Obesity 1", highlight = sigSNPs)
+manhattan(obe2.snp, main = "Obesity 2", highlight = sigSNPs)
+manhattan(obe3.snp, main = "Obesity 3", highlight = sigSNPs)
+
+```
+
+
+```{r}
+getSNPimputationStatus <- function(cohort, selSNPs){
+    
+    path <- "../results/postImputation/MichiganOutput/"
+    chrom <- c(1:22, "X")
+    infoL <- lapply(chrom, function(chr){
+        a <- read_table2(paste0(path, cohort, "/chr", chr, ".info.gz"))
+        subset(a, SNP %in% selSNPs)
+    })
+    infoDf <- Reduce(rbind, infoL)
+    infoDf$Cohort <- cohort
+    infoDf
+}
+info.list <- lapply(c("Epicuro", paste0("Obesity", 1:3)), 
+                    getSNPimputationStatus, selSNPs = sigSNPs)
+info.df <- Reduce(rbind, info.list)
+table(info.df$Genotyped, info.df$Cohort)
+```
+
+Most of the significant SNPs were imputed. Nonetheless, the proportion of genotypes SNPs is higher in Epicuro, possibly due to its large array size.
+
+```{r}
+info.df %>%
+    ggplot(aes(x = Cohort, y = Rsq, color = Cohort)) +
+    geom_boxplot() +
+    theme_bw()
+info.df %>%
+    group_by(Cohort) %>%
+    summarize(median_Rsq = median(Rsq))
+pairwise.wilcox.test(info.df$Rsq, info.df$Cohort)
+```
+
+Significant SNPs have larger median imputation quality in Epicuro and Obesity1 than in Obesity2 and Obesity3. 
+
+
+```{r}
+info.df %>%
+    ggplot(aes(x = Cohort, y = as.numeric(EmpRsq), color = Cohort)) +
+    geom_boxplot() +
+    theme_bw()
+info.df %>%
+    group_by(Cohort) %>%
+    summarize(median_LooRsq = median(as.numeric(EmpRsq), na.rm = TRUE))
+pairwise.wilcox.test(as.numeric(info.df$EmpRsq ), info.df$Cohort)
+```
+
+When comparing the empirical Rsq, the differences between the cohorts are reduced.
+
+
+```{r}
+ggplot(info.df, aes(x = MAF, y = Rsq)) +
+    geom_point() +
+    geom_smooth(method='lm') +
+    theme_bw() +
+    facet_wrap(~ Cohort)
+info.df %>%
+    group_by(Cohort) %>%
+    summarize(cor = cor(Rsq, MAF),
+              cor.P = cor.test(Rsq, MAF)$p.value)
+```
+There is a strong correlation between MAF and Rsq in Epicuro. In the other cohorts, the correlation is less strong. 
+
+```{r}
+sig.allcohort <- single.snp %>%
+    filter(SNP %in% sigSNPs) %>%
+    mutate(Cohort = "Combined") %>%
+    rbind(filter(obe1.snp, SNP %in% sigSNPs) %>% mutate(Cohort = "Obesity1")) %>%
+    rbind(filter(obe2.snp, SNP %in% sigSNPs) %>% mutate(Cohort = "Obesity2")) %>%
+    rbind(filter(obe3.snp, SNP %in% sigSNPs) %>% mutate(Cohort = "Obesity3")) 
+
+
+sig.p <- sig.allcohort %>%
+    dplyr::select(SNP, CHR, BP, P, Cohort) %>%
+    mutate(P = -log10(P)) %>%
+    spread(Cohort, P) 
+
+sig.p.tmp <- sig.p %>%
+    mutate(P.Combined = Combined,
+           P.Obesity1 = Obesity1,
+           P.Obesity2 = Obesity2,
+           P.Obesity3 = Obesity3) %>%
+    dplyr::select(SNP, starts_with("P."))
+
+info.tmp <- cbind(info.df %>%
+                      dplyr::select(SNP, Rsq, Cohort) %>%
+                      mutate(Cohort = paste0("Rsq.", Cohort)) %>%
+                      spread(Cohort, Rsq),  
+                  info.df %>%
+                      dplyr::select(SNP, EmpRsq, Cohort) %>%
+                      mutate(Cohort = paste0("EmpRsq", Cohort)) %>%
+                      spread(Cohort, EmpRsq))
+    
+
+sig.beta <- sig.allcohort %>%
+    dplyr::select(SNP, CHR, BP, BETA, Cohort) %>%
+    spread(Cohort, BETA) %>%
+    left_join(sig.p.tmp, by = "SNP") %>%
+    left_join(dplyr::select(info.df, SNP, Rsq, Cohort) %>%
+                  mutate(Cohort = paste0("Rsq.", Cohort)) %>%
+                  spread(Cohort, Rsq), 
+              by = "SNP")
+
+combP.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "P.Combined")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combP.l, ncol = 2)
+diffcombP.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+       cor.test(formula(paste0("~ P.Combined + Rsq.",  x)), data =  sig.beta)
+})
+names(diffcombP.l) <- c("Epicuro", paste0("Obesity", 1:3))
+diffcombP.l
+```
+
+There is almost no correlation between the Rsq of Epicuro and the P value of the significant SNPs in the main analysis. On the other hand, we observed a significant correlation between the GWAS P-values and the imputation quality for the case cohorts, suggesting that variants with better imputation are also the variants we found associated with the disease. 
+
+
+```{r}
+combBeta.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "Combined")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        scale_y_log10() +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combBeta.l, ncol = 2)
+diffcombBeta.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+       cor.test(formula(paste0("~ log(Combined) + Rsq.",  x)), data =  sig.beta)
+})
+names(diffcombBeta.l) <- c("Epicuro", paste0("Obesity", 1:3))
+diffcombBeta.l
+```
+
+We observed a correlation between the Rsq and the OR of the combined model. Thus, higher imputation quality in Epicuro are correlated with ORs < 1, indicating that the alternative allele is more frequent in this cohort than in the rest. On the other hand, higher imputation qualities in case cohorts are correlated with ORs > 1, suggesting that the alternative allele in more frequent in the cases than in Epicuro. This results might suggest that variants with low imputation scores are underestimating the proportion of the reference allele. 
+
+
+```{r}
+sig.beta %>%
+    mutate(Rsq.range = dplyr::select(., Rsq.Epicuro, Rsq.Obesity1, Rsq.Obesity2, Rsq.Obesity3) %>% data.matrix() %>% apply(., 1, function(x) max(x) - min(x))) %>%
+    ggplot(aes(x = Rsq.range, y = Combined)) +
+    geom_point(alpha = 0.3) +
+    geom_hline(yintercept = c(10, 0.1), linetype = "dashed") +
+    geom_smooth(method='lm') +
+    scale_y_log10(name = "OR full cohort") +
+    theme_bw() 
+
+```
+This plot compares the ORs in the full cohort with the range in Rsq between the cohorts. We observe that variants with extreme ORs (OR > 10 or OR < 1) are more frequent for variants with larger ranges. 
+
+We explored how the Rsq range affects the correlation between Rsq and OR.
+
+```{r}
+sig.beta <-   sig.beta %>%
+    mutate(Rsq.range = dplyr::select(., Rsq.Epicuro, Rsq.Obesity1, Rsq.Obesity2, Rsq.Obesity3) %>% data.matrix() %>% apply(., 1, function(x) max(x) - min(x)), 
+           Rsq.rangecat = cut(Rsq.range, breaks = c(0, 0.2, 0.4, 2), 
+                              labels = c("<0.2", "0.2-0.4", ">0.4"))) 
+combBeta1.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "Combined")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        scale_y_log10() +
+        facet_grid(. ~ Rsq.rangecat) +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combBeta1.l, ncol = 1)
+```
+
+When the Rsq range is lower than 0.2, we lose the correlation between the OR and the imputations Rsq.
+
+```{r}
+combBeta2.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+    sig.beta %>%
+        filter(Rsq.rangecat == "<0.2") %>%
+        ggplot(aes_string(x = paste0("Rsq.", x), y = "Combined")) +
+        geom_point(alpha = 0.3) +
+        geom_smooth(method='lm') +
+        scale_y_log10() +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = combBeta2.l, ncol = 2)
+diffcombBeta2.l <- lapply(c("Epicuro", paste0("Obesity", 1:3)), function(x){
+       cor.test(formula(paste0("~ log(Combined) + Rsq.",  x)), 
+                data =  sig.beta, Rsq.rangecat == "<0.2")
+})
+names(diffcombBeta2.l) <- c("Epicuro", paste0("Obesity", 1:3))
+diffcombBeta2.l
+```
+
+Thus, we decided to remove all the variants where the Rsq range (difference between the maximum and minimum Rsq) was larger than 0.2.
+
+```{r}
+sig.beta.filt <- subset(sig.beta, Rsq.rangecat == "<0.2")
+beta.l <- lapply(paste0("Obesity", 1:3), function(x){
+    sig.beta.filt %>%
+        ggplot(aes_string(x = "Combined", y = x)) +
+        geom_point(alpha = 0.3) +
+        scale_x_log10() +
+        scale_y_log10() +
+        geom_abline(slope = 1) +
+        geom_hline(yintercept = 1) +
+        geom_vline(xintercept = 1) +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = beta.l, ncol = 3)
+
+sig.p <- sig.allcohort %>%
+    filter(SNP %in% sig.beta.filt$SNP) %>%
+    dplyr::select(SNP, CHR, BP, P, Cohort) %>%
+    mutate(P = -log10(P)) %>%
+    spread(Cohort, P) 
+
+p.l <- lapply(paste0("Obesity", 1:3), function(x){
+    ggplot(sig.p, aes_string(x = "Combined", y = x)) +
+        geom_point(alpha = 0.3) +
+        geom_abline(slope = 1) +
+        theme_bw() +
+        scale_x_continuous(limits = c(0, 43)) +
+        scale_y_continuous(limits = c(0, 43)) +
+        ggtitle(x)
+})
+plot_grid(plotlist = p.l, ncol = 3)
+```
+
+In general, the ORs are consistent between the full model and the subcohorts. Obesity1 presents the higher discrepancies, with a high number of variants with no association or inverse association in the subcohort with respect to the full model. On the other hand, Obesity3 had an almost perfect correlation with the full model estimate, possibly because is the biggest cohort and have a greater influence in the results. P-values are much smaller in the subcohorts and can only be compared in Obesity3, the biggest subcohort.
+
+```{r}
+sig.beta.filt <- sig.beta.filt %>% 
+    mutate(direction = ifelse(Obesity1 > 1 & Obesity2 > 1 & Obesity3 > 1, "Positive",
+                              ifelse(Obesity1 < 1 & Obesity2 < 1 & Obesity3 < 1, "Negative",
+                                     "Incoherent")),
+           coherence = ifelse(!is.na(direction) & direction != "Incoherent", "Coherent", "Incoherent"))
+
+
+beta2.l <- lapply(paste0("Obesity", 1:3), function(x){
+    sig.beta.filt %>%
+        ggplot(aes_string(x = "Combined", y = x)) +
+        geom_point(alpha = 0.3) +
+        scale_x_log10() +
+        scale_y_log10() +
+        geom_abline(slope = 1) +
+        geom_hline(yintercept = 1) +
+        geom_vline(xintercept = 1) +
+        theme_bw() +
+        facet_grid(~ coherence) +
+        ggtitle(x)
+})
+plot_grid(plotlist = beta2.l, ncol = 3)
+
+
+diff.l <- lapply(paste0("Obesity", 1:3), function(x){
+     sig.beta.filt %>%
+        mutate(Pdiff = P.Combined - !!sym(paste0("P.", x)),
+             Betadiff = Combined / !!sym(x)) %>%
+     ggplot(aes(x = P.Combined, y = Betadiff)) +
+        geom_point(alpha = 0.3) +
+        theme_bw() +
+        geom_hline(yintercept = 1) +
+        scale_y_log10(name = "OR full / OR subcohort") +
+        ggtitle(x) +
+        facet_grid(direction ~ .)
+})
+plot_grid(plotlist = diff.l, ncol = 3)
+
+
+diffcor.l <- lapply(paste0("Obesity", 1:3), function(x){
+     sig.beta.filt %>%
+        mutate(Pdiff = P.Combined - !!sym(paste0("P.", x)),
+               Betadiff = Combined / !!sym(x),
+               Betadiff = abs(log(Betadiff))) %>%
+    cor.test(~ Pdiff +  Betadiff, data =  .)
+        
+})
+diffcor.l
+
+
+```
+
+
+Finally, we observed a small correlation between the differences in P-value between full cohort and the small cohorts and the difference in beta estimate between the full cohort and the main cohort. This result suggest that differences in significance are more related to lower power than to a different association. 
+
+```{r}
+diffP.Rsq.l <- lapply(paste0("Obesity", 1:3), function(x){
+     sig.beta %>%
+        mutate(Pdiff = P.Combined - !!sym(paste0("P.", x)),
+               Rsq = !!sym(paste0("Rsq.", x))) %>%
+    ggplot(aes(x = Pdiff, y = Rsq)) +
+        geom_point(alpha = 0.1) +
+        geom_smooth(method='lm') +
+        theme_bw() +
+        ggtitle(x)
+})
+plot_grid(plotlist = diffP.Rsq.l, ncol = 3)
+
+diffP.Rsqcor.l <- lapply(paste0("Obesity", 1:3), function(x){
+     sig.beta %>%
+       mutate(Pdiff = P.Combined - !!sym(paste0("P.", x)),
+               Rsq = !!sym(paste0("Rsq.", x))) %>%
+     cor.test(~ Pdiff +  Rsq, data =  .)
+        
+})
+diffP.Rsqcor.l
+
+```
+
+Only for Obesity3 we observed a correlation between the difference in P-value between the main and the small cohort model and the imputation quality. 
+
+## Inversions
+
+We associated the chromosomal inversions from scoreInvHap with extreme obesity. We adjusted all the models by the first 10 principal components of genetic variance. 
+
+```{r}
+load("../results/associations/inversions/2021-04-16/Obesity.inversions.assoc.Rdata")
+inv_assocs
+```
+Only inv16_009 was associated with extreme obesity.
+
+```{r}
+attr(inv_assocs, "tables")$inv16_009
+```
+
+Inverted allele is more frequent in case samples. The results support a dominant model, where having at least one inverted allele have 1.41 more changes of having obesity. 
+
+
+
+# Genetic scores
+
+We obtained polygenic risk scores from a model of BMI obtained from GWAS catalog (PGS000027).
+
+```{r}
+iniQCfam <- dir(path = "../results/preImputation/plink/", pattern = "fam",
+  full.names = TRUE, recursive = TRUE)
+names(iniQCfam) <- gsub(".fam", "", basename(iniQCfam))
+
+famObj <- lapply(iniQCfam, read.delim, header = FALSE, sep = " ")
+famDf <- Reduce(rbind, famObj) %>%
+  mutate(Dataset = rep(names(iniQCfam), sapply(famObj, nrow)),
+         IID = V2) %>%
+  dplyr::select(IID, Dataset)
+
+pcs <- read.table("../results/postImputation/stats/2021-04-06/mergedDataset.filtered.eigenvec")
+colnames(pcs) <- c("FID", "IID", paste0("PC", 1:10))
+
+pgs <- read.table("../results/associations/PRS/2021-04-16/obesity.profile", 
+                  header = TRUE) %>%
+    mutate(STATUS = ifelse(grepl("SB", IID), "Control", "Case"),
+           STATUS = factor(STATUS, levels = c("Control", "Case")),
+           PGS = (SCORESUM - mean(SCORESUM))/sd(SCORESUM), 
+           PGS_quantile = cut(PGS, 
+                              breaks = quantile(PGS, seq(0, 1, 0.1)),
+                              labels = paste0("Q", 1:10),
+                              include.lowest = TRUE),
+           PGS_carrier = ifelse(PGS_quantile == "Q10", "Carrier", "Reference"),
+           PGS_carrier = factor(PGS_carrier, levels = c("Reference", "Carrier"))) %>%
+    left_join(dplyr::select(pcs, -FID), by = "IID") %>%
+    left_join(famDf, by = "IID") %>%
+    as_tibble()
+
+```
+```{r}
+pgs %>%
+    ggplot(aes(x = PGS, color = STATUS)) +
+    geom_density() +
+    theme_bw() +
+    geom_vline(xintercept = 0)
+
+pgs %>% 
+    lm(PGS ~ STATUS, .) %>%
+    summary()
+
+pgs %>% 
+    dplyr::select(starts_with("PC"), STATUS, PGS) %>%
+    lm(PGS ~ ., .) %>%
+    summary()
+```
+
+Case samples have higher polygenic risk scores than control samples. This difference is significant even after adjusting for genetic principal components. 
+
+
+```{r}
+pgs_Qtab <- pgs %>%
+    mutate(PGS_cat = ifelse(PGS_quantile == "Q1", "Bottom quantile", 
+                            ifelse(PGS_quantile == "Q10", "Top quantile", 
+                                   "Quantiles 2-9")),
+           PGS_cat = factor(PGS_cat, 
+                            levels = c("Bottom quantile", "Quantiles 2-9", "Top quantile"))) %>%
+    group_by(STATUS, PGS_cat) %>%
+    summarize(n = n()) %>%
+    group_by(PGS_cat) %>%
+    mutate(prop = n/sum(n))
+pgs_Qtab %>%
+    ggplot(aes(x = PGS_cat, y = prop, fill = PGS_cat)) +
+    geom_bar(stat = "identity", colour = "black") +
+    facet_grid(~ STATUS) +
+    xlab("Disease Status") +
+    ylab("Percent") +
+    scale_fill_manual(name = "Polygenic score", values = c("#EEEEEE", "#999999", "#444444"))
+```
+
+The proportion of individuals with extreme obesity is much higher in the top quantile than in the bottom quantile.
+
+```{r}
+pgs %>% 
+    dplyr::select(starts_with("PC"), STATUS, PGS_carrier) %>%
+    glm(STATUS ~ ., ., family = "binomial") %>%
+    summary()
+
+pgs %>% 
+    dplyr::select(starts_with("PC"), STATUS, PGS_carrier) %>%
+    glm(STATUS ~ ., ., family = "binomial") %>%
+    logistic.display()
+```
+
+Individuals in the top decile of the PRS have an OR of 3.3 of being extreme obese.
+
+## Stratification by cohort
+
+We examined whether we could find differences between the cohorts, which can be caused by technical differences during implementation.
+
+```{r}
+pgs %>%
+    ggplot(aes(x = PGS, color = Dataset)) +
+    geom_density() +
+    theme_bw() +
+    geom_vline(xintercept = 0)
+
+pgs %>% 
+    dplyr::select(starts_with("PC"), Dataset, PGS) %>%
+    lm(PGS ~ ., .) %>%
+    summary()
+
+pgs %>% 
+    dplyr::select(starts_with("PC"), Dataset, PGS) %>%
+    mutate(Dataset = factor(Dataset, levels = c("Obesity2", "Obesity1", "Obesity3", "Epicuro"))) %>%
+    lm(PGS ~ ., .) %>%
+    summary()
+```
+
+There are no significant differences in mean PGS between the three cohorts.

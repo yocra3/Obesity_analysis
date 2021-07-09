@@ -18,6 +18,7 @@ library(qqman)
 library(kableExtra)
 library(tidyverse)
 library(GenomicRanges)
+library(gwascat)
 library(SNPassoc)
 library(epiDisplay)
 library(cowplot)
@@ -41,7 +42,6 @@ lambdaClayton <- function(x, trim = 0.5) {
     lambda <- mean(obsvd[1:Nu])/mean(expctd[1:Nu])
     lambda
 }
-version <- "2021-06-15"
 ```
 
 ```{r, cache = TRUE}
@@ -50,7 +50,7 @@ getGWASTab <- function(path){
 colnames(tab) <- c("CHR", "SNP", "BP", "ALLELE", "MODEL", "SAMPS", "BETA", "SE", "P", "REF", "ALT") 
     subset(tab, !is.na(P))
 }
-single.snp <- getGWASTab(paste0("../results/associations/GWAS/", version, "/Obesity.GWAS.locuszoom.input.gz"))
+single.snp <- getGWASTab("../results/associations/GWAS/2021-04-26/Obesity.GWAS.locuszoom.input.gz")
 
 ```
 
@@ -73,9 +73,9 @@ We run two approaches to define loci:
 - Depict: depict based on SNPs with P < 1e-5. Performs a similar clustering but also includes nearby genes.
 
 ```{r}
-lociplink <- read_table2(paste0("../results/associations/GWAS/", version, "/Obesity.GWAS.plink.clumped"),
+lociplink <- read_table2("../results/associations/GWAS/2021-04-26/Obesity.GWAS.plink.clumped",
                      progress = TRUE, col_names = TRUE)
-locidepict <- read_delim("../results/associations/GWAS/2021-06-11/assoc_loci.txt",
+locidepict <- read_delim("../results/associations/GWAS/2021-04-26/assoc_loci.txt",
                      progress = TRUE, col_names = TRUE, comment = "#", delim = "\t")
 
 ## Create range with SNPs in SP2
@@ -125,12 +125,44 @@ comGR.filt <- c(comGR.filt, comGR[unique(from(over.LCR))][good])
 
 We got a final set of `r length(comGR.filt)` loci with significant genome-wide association with extreme obesity and outside segmental duplications regions. 
 
-
-## Imputation artifacts
-
-We evaluated whether the hits might be caused by artifacts in the imputation.
+```{r, cache = TRUE}
+options(timeout = 3600)
+curgwas <- makeCurrentGwascat(genome = "GRCh37")
+bmi.gwas <- subsetByTraits(curgwas, tr = c("Body mass index", "Obesity and osteoporosis",
+                                           "Overweight status",
+                                           "Birth weight", 
+                                           "Underweight status",
+                                           "Birth weight variance",
+                                           "Offspring birth weight",
+                                           "Obesity", "Obesity (extreme)",
+                                           "Obesity (early onset extreme)", 
+                                           "Obesity-related traits", "Childhood obesity"))
+```
+Next, we checked the overlap with hits associated with obesity or body mass index in the GWAS catalog. We used a window of 500Kb to identify matches with previous loci. 
 
 ```{r}
+ov.nogwas <- findOverlaps(comGR.filt + 500e3, bmi.gwas)
+comGR.nogwas <- comGR.filt[-unique(from(ov.nogwas))]
+```
+
+`r length(unique(from(ov.nogwas)))` loci were previously described in GWAS catalog while `r length(comGR.nogwas)` loci are novel. We will explore these loci with further detail. 
+
+```{r}
+plink.new <- subset(lociplink.range, id %in% comGR.nogwas$id)
+depict.new <- subset(locidepict, id %in% comGR.nogwas$id)
+
+```
+## Stratification by cohort
+
+```{r, cache = TRUE}
+obe1.snp <- getGWASTab("../results/associations/GWAS/2021-04-26/Obesity.GWAS.Obesity1.locuszoom.input.gz")
+obe2.snp <- getGWASTab("../results/associations/GWAS/2021-04-26/Obesity.GWAS.Obesity2.locuszoom.input.gz")
+obe3.snp <- getGWASTab("../results/associations/GWAS/2021-04-26/Obesity.GWAS.Obesity3.locuszoom.input.gz")
+```
+
+```{r, cache = TRUE}
+sigSNPs <- subset(single.snp, P < 5e-8)$SNP
+
 getSNPimputationStatus <- function(cohort, selSNPs){
     
     path <- "../results/postImputation/MichiganOutput/"
@@ -143,49 +175,6 @@ getSNPimputationStatus <- function(cohort, selSNPs){
     infoDf$Cohort <- cohort
     infoDf
 }
-info.full.list <- lapply(c("Epicuro", paste0("Obesity", 1:3)), 
-                    getSNPimputationStatus, selSNPs = single.snp$SNP)
-info.full.df <- Reduce(rbind, info.full.list)
-```
-
-
-```{r}
-snp.imp.tab <- info.full.df %>%
-  dplyr::select(SNP, Genotyped, Cohort) %>%
-  spread(Cohort, Genotyped)
-
-geno.SNPs <- subset(snp.imp.tab, Epicuro == "Genotyped" & 
-                      Obesity1 == "Genotyped" & 
-                      Obesity2 == "Genotyped" &
-                      Obesity3 == "Genotyped" )$SNP
-geno.SNPs2 <- subset(snp.imp.tab, Epicuro == "Genotyped" & 
-                      Obesity3 == "Genotyped" )$SNP
-```
-
-
-```{r}
-manhattan(subset(single.snp, SNP %in% geno.SNPs))
-
-```
-When restricting the GWAS to SNPs genotypes in the 4 cohorts, we only see some suggestive associations.
-
-```{r}
-manhattan(subset(single.snp, SNP %in% geno.SNPs2))
-
-```
-
-We got the same hits when considering SNPs genotyped in Epicuro and Obesit3 (biggest case cohort).
-
-## Stratification by cohort
-
-```{r, cache = TRUE}
-obe1.snp <- getGWASTab(paste0("../results/associations/GWAS/", version, "/Obesity.GWAS.Obesity1.locuszoom.input.gz"))
-obe2.snp <- getGWASTab(paste0("../results/associations/GWAS/", version, "/Obesity.GWAS.Obesity2.locuszoom.input.gz"))
-obe3.snp <- getGWASTab(paste0("../results/associations/GWAS/", version, "/Obesity.GWAS.Obesity3.locuszoom.input.gz"))
-```
-
-```{r, cache = TRUE}
-sigSNPs <- subset(single.snp, P < 5e-8)$SNP
 info.list <- lapply(c("Epicuro", paste0("Obesity", 1:3)), 
                     getSNPimputationStatus, selSNPs = sigSNPs)
 info.df <- Reduce(rbind, info.list)
@@ -377,282 +366,12 @@ diffP.Rsqcor.l
 Only for Obesity3 we observed a correlation between the difference in P-value between the main and the small cohort model and the imputation quality. 
 
 
-## Comparison with literature
-
-We compared our results with the large meta-analysis of adult BMI (GIANT), children obesity (EGG consortium and SCOOP) and early-onset severe obesity (SCOOP). 
-
-```{r}
-giant <- read_table2("../data/bmi.giant-ukbb.meta-analysis.combined.23May2018.txt.gz")
-egg <- read_table2("../data/CHILDHOOD_OBESITY.TRANS_ANCESTRAL.RESULTS.txt.gz")
-
-scoop_obese <- read_table2("../data/SCOOP_STILTS_ldcorrected.gz")
-scoop_extreme <- read_table2("../data/SCOOP_UKHLS_ldcorrected.gz")
-
-giant$COORD <- paste(giant$CHR, giant$POS, sep = ":") 
-egg$COORD <- paste(egg$CHR, egg$POS, sep = ":") 
-scoop_obese$COORD <- paste(scoop_obese$CHR, scoop_obese$POS, sep = ":") 
-scoop_extreme$COORD <- paste(scoop_extreme$CHR, scoop_extreme$POS, sep = ":") 
-```
-
-```{r, cache = TRUE}
-single.snp$COORD <- paste(single.snp$CHR, single.snp$BP, sep = ":") 
-sigCoords <- subset(single.snp, P < 5e-8)$COORD
-sigCoordsGR <- GRanges(sigCoords)
-sigCoords.filt <- sigCoords[-unique(from(findOverlaps(sigCoordsGR, LCRGR)))]
-```
-
-`r round(mean(sigCoords.filt %in% giant$COORD)*100, 2)`% of our significant SNPs were also reported in GIANT, `r round(mean(sigCoords.filt %in% egg$COORD)*100, 2)`% were also reported in EGG, while `r round(mean(sigCoords.filt %in% scoop_obese$COORD)*100, 2)`% SCOOP obesity and `r round(mean(sigCoords.filt %in% scoop_extreme$COORD)*100, 2)`% SCOOP extreme obesity. Then, we compared the estimates between our cohort and these meta-analysis. For EGG, we used the beta from the European population.
-
-```{r, cache = TRUE}
-loci.lit <- single.snp %>%
-  mutate(BETA_OBE = BETA,
-         P_OBE = P) %>%
-  dplyr::select(COORD, ALLELE, BETA_OBE, P_OBE, SNP) %>%
-  left_join(giant %>%
-              mutate(BETA_GIANT = BETA,
-                     P_GIANT = P) %>%
-              dplyr::select(COORD, Tested_Allele, BETA_GIANT, P_GIANT),
-            by = "COORD") %>%
-    left_join(egg %>%
-              mutate(BETA_EGG = as.numeric(EUR_BETA),
-                     P_EGG = as.numeric(EUR_P)) %>%
-              dplyr::select(COORD, EA, BETA_EGG, P_EGG),
-            by = "COORD") %>%
-    left_join(scoop_obese %>%
-              mutate(BETA_SC_OB = OR,
-                     P_SC_OB = P,
-                     EA_SC_OB = EA) %>%
-                dplyr::select(COORD, EA_SC_OB, BETA_SC_OB, P_SC_OB),
-            by = "COORD") %>%
-      left_join(scoop_extreme %>%
-              mutate(BETA_SC_EXT = OR,
-                     P_SC_EXT = P,
-                     EA_SC_EXT = EA) %>%
-              dplyr::select(COORD, EA_SC_EXT, BETA_SC_EXT, P_SC_EXT),
-            by = "COORD")  %>%
-  filter(P_OBE < 5e-8 | P_GIANT < 5e-8 | P_EGG < 5e-8 | P_SC_OB < 5e-8 | P_SC_EXT < 5e-8 | (SNP %in% geno.SNPs & P_OBE < 1e-5)) %>%
-  mutate(BETA_EGG_mod = ifelse(toupper(EA) == ALLELE, BETA_EGG, -BETA_EGG),
-         BETA_GIANT_mod = ifelse(Tested_Allele == ALLELE, BETA_GIANT, -BETA_GIANT),
-         BETA_SC_OB_mod = ifelse(toupper(EA_SC_OB) == ALLELE, BETA_SC_OB, 1/BETA_SC_OB),
-         BETA_SC_EXT_mod = ifelse(toupper(EA_SC_EXT) == ALLELE, BETA_SC_EXT, 1/BETA_SC_EXT),
-         class = ifelse(P_OBE < 5e-8, ifelse(P_GIANT < 5e-8 | P_EGG < 5e-8 | P_SC_OB < 5e-8 | P_SC_EXT < 5e-8 , "Common", "OBE imputed"), ifelse(SNP %in% geno.SNPs & P_OBE < 1e-5, "OBE genotyped", "Literature")))
-single.snp$COORD <- NULL
-```
-
-```{r}
-p_egg <- ggplot(loci.lit, aes(x = -log10(P_OBE), y = -log10(P_EGG), color = class)) + 
-  geom_point() +
-  geom_hline(yintercept = 7.3) +
-  geom_vline(xintercept = 7.3) +
-  theme_bw() +
-  scale_x_continuous("-log10 P Obesity") +
-  ggtitle("Children Obesity EGG")
-
-p_giant <- ggplot(loci.lit, aes(x = -log10(P_OBE), y = -log10(P_GIANT), color = class)) + 
-  geom_point() +
-  geom_hline(yintercept = 7.3) +
-  geom_vline(xintercept = 7.3) +
-  theme_bw() +
-  scale_x_continuous("-log10 P Obesity") +
-  ggtitle("BMI Adults")
-
- p_ob <- ggplot(loci.lit, aes(x = -log10(P_OBE), y = -log10(P_SC_OB), color = class)) + 
-  geom_point() +
-  geom_hline(yintercept = 7.3) +
-  geom_vline(xintercept = 7.3) +
-  theme_bw() +
-  scale_x_continuous("-log10 P Obesity") +
-  ggtitle("Children Obesity SCOOP")
-
-  p_ext <- ggplot(loci.lit, aes(x = -log10(P_OBE), y = -log10(P_SC_EXT), color = class)) + 
-  geom_point() +
-  geom_hline(yintercept = 7.3) +
-  geom_vline(xintercept = 7.3) +
-  theme_bw() +
-  scale_x_continuous("-log10 P Obesity") +
-  ggtitle("Extreme Children Obesity SCOOP")
-plot_grid(p_ext, p_ob, p_egg, p_giant, ncol = 2)
-```
-
-There is no correlation between the p-values in our GWAS and the p-values from the literature. Thus, the hits identified in our cohort have not been previously identified, while the hits identified in GIANT, EGG and SCOOP have not been found in our cohort. 
-
-```{r}
-beta_giant <- loci.lit %>%
-  filter((P_OBE < 5e-8 | P_GIANT < 5e-8 | SNP %in% geno.SNPs) & !is.na(class)) %>%
-  ggplot(aes(x = BETA_OBE, y = BETA_GIANT_mod, color = class)) + 
-  geom_point() +
-  scale_x_log10("Obesity OR") +
-  geom_hline(yintercept = 0) +
-  geom_vline(xintercept = 1) +
-  theme_bw()  +
-  facet_grid(~ class, scales = "free") +
-  ggtitle("BMI Adults")
-
-beta_egg <-  loci.lit %>%
-  filter((P_OBE < 5e-8 | P_EGG < 5e-8 | SNP %in% geno.SNPs) & !is.na(class)) %>%
-  ggplot(aes(x = BETA_OBE, y = exp(BETA_EGG_mod), color = class)) + 
-  geom_point() +
-  scale_x_log10("Obesity OR") +
-  scale_y_log10() +
-  geom_hline(yintercept = 1) +
-  geom_vline(xintercept = 1) +
-  geom_abline(slope = 1) +
-  theme_bw() +
-  facet_grid(~ class, scales = "free") +
-  ggtitle("Children Obesity EGG")
-
-beta_ob <-  loci.lit %>%
-  filter((P_OBE < 5e-8 | P_SC_OB < 5e-8  | SNP %in% geno.SNPs) & !is.na(class)) %>%
-  ggplot(aes(x = BETA_OBE, y = BETA_SC_OB_mod, color = class)) + 
-  geom_point() +
-  scale_x_log10("Obesity OR") +
-  scale_y_log10() +
-  geom_hline(yintercept = 1) +
-  geom_vline(xintercept = 1) +
-  geom_abline(slope = 1) +
-  theme_bw() +
-  facet_grid(~ class, scales = "free") +
-  ggtitle("Children Obesity SCOOP")
-
-beta_ext <-  loci.lit %>%
-  filter((P_OBE < 5e-8 | P_SC_EXT < 5e-8  | SNP %in% geno.SNPs) & !is.na(class)) %>%
-  ggplot(aes(x = BETA_OBE, y = BETA_SC_EXT_mod, color = class)) + 
-  geom_point() +
-  scale_x_log10("Obesity OR") +
-  scale_y_log10() +
-  geom_hline(yintercept = 1) +
-  geom_vline(xintercept = 1) +
-  geom_abline(slope = 1) +
-  theme_bw() +
-  facet_grid(~ class, scales = "free") +
-  ggtitle("Extreme Children Obesity SCOOP")
-
-
-plot_grid(beta_ext, beta_ob, beta_egg, beta_giant, nrow = 2)
-
-
-```
-
-
-
-Only one of the hits in our genotyped subset had signicant ORs in any of the datasets. For the other hits, the OR in the literature was close to 0. 
-
-```{r}
-subset(loci.lit, class == "OBE genotyped") %>% data.frame()
-```
-
-```{r}
-cohorts <- c("SC_EXT", "SC_OB", "EGG", "GIANT")
-names(cohorts) <- cohorts
-lapply(cohorts, function(x) {
-  if ( x == "EGG"){
-      cor.test(formula(~ exp(BETA_EGG_mod) + BETA_OBE), loci.lit, subset = loci.lit$class == "Literature")
-  } else{
-      cor.test(formula(paste0("~ BETA_", x, "_mod + BETA_OBE")), loci.lit, subset = loci.lit$class == "Literature")
-  }
-} )
-
-```
-Despite the literature hits had big p-values in our cohort, the inferred beta values are moderately correlated (r around 0.25). Interestingly, we observed that for children obesity in SCOOP, ORs in our GWAS were more extreme than those originally reported, although none of these hits was significant in our GWAS.
-
-```{r}
-lapply(cohorts, function(x) {
-    if ( x == "EGG"){
-      cor.test(formula(~ exp(BETA_EGG_mod) + BETA_OBE), loci.lit, subset = loci.lit$class == "OBE imputed")
-    } else{
-        cor.test(formula(paste0("~ BETA_", x, "_mod + BETA_OBE")), loci.lit, subset = loci.lit$class == "OBE imputed")
-
-    }
-
-} )
-```
-
-On the other hand, we observed very little correlation between the beta values of the hits detected in our GWAS and in the literature. The main exception was with hits from Extreme children obesity, where we achieved a high correlation. Unexpectedly, we observed a strong but inverse correlation between our GWAS beta-values and beta values from EGG.
-
-```{r}
-p_lit <- loci.lit %>%
-  filter(class == "Literature") %>%
-  ggplot(aes(x = -log10(P_EGG), y = -log10(P_SC_OB))) + 
-  geom_point() +
-  scale_x_continuous("EGG -log10 P") +
-  scale_y_continuous("SCOOP -log10 P") +
-  geom_hline(yintercept = 7.3) +
-  geom_vline(xintercept = 7.3) +
-  theme_bw()
-
-beta_lit <- loci.lit %>%
-  filter(class == "Literature") %>%
-  ggplot(aes(x = exp(BETA_EGG_mod), y = BETA_SC_OB_mod)) + 
-   scale_x_log10("EGG OR") +
-  scale_y_log10("SCOOP OR") +
-  geom_point() +
-  geom_hline(yintercept = 1) +
-  geom_vline(xintercept = 1) +
-  geom_abline(slope = 1) +
-  theme_bw()
-plot_grid(p_lit, beta_lit, nrow = 1)
-```
-
-Finally, we compared the p-values and the betas from the two GWAS of children obesity. In this case, the p-values are highly correlated, although they are smaller in EGG, the cohort with the biggest sample size. Regarding the ORs, there are also more extreme in EGG, although they are mostly coherent. 
-```{r}
-rm(loci.lit, giant, egg, scoop_obese, scoop_extreme)
-gc()
-```
-
-## Adjustment for genetic components
-
-```{r, cache = TRUE}
-raw.snp <- getGWASTab(paste0("../results/associations/GWAS/", version, "/Obesity.GWAS.plink.raw.locuszoom.input.gz"))
-```
-
-```{r}
-sig.raw <- single.snp %>%
-    filter(P < 5e-8) %>%
-    mutate(Model = "Full") %>%
-    rbind(filter(raw.snp, P < 5e-8) %>% mutate(Model = "Crude")) 
-
-raw.beta <- sig.raw %>%
-  dplyr::select(SNP, CHR, BP, BETA, Model) %>%
-  spread(Model, BETA) %>%
-  ggplot(aes(x = Full, y = Crude)) +
-        geom_point(alpha = 0.3) +
-        scale_x_log10() +
-        scale_y_log10() +
-        geom_abline(slope = 1) +
-        geom_hline(yintercept = 1) +
-        geom_vline(xintercept = 1) +
-        theme_bw() +
-        ggtitle("OR comparison")
-
-raw.p  <- sig.raw %>%
-  dplyr::select(SNP, CHR, BP, P, Model) %>%
-    mutate(P = -log10(P)) %>%
-    spread(Model, P) %>% 
-  ggplot(aes(x = Full, y = Crude)) +
-        geom_point(alpha = 0.3) +
-        geom_abline(slope = 1) +
-        theme_bw() +
-        scale_x_continuous(limits = c(0, 43)) +
-        scale_y_continuous(limits = c(0, 43)) +
-        ggtitle("-log10 P comparison")
-
-plot_grid(raw.beta, raw.p, ncol = 2)
-
-sig.raw %>%
-  dplyr::select(SNP, CHR, BP, BETA, Model) %>%
-  spread(Model, BETA) %>%
-  cor.test(~ Full + Crude, data = .)
-```
-
-The coefficients are almost identical in the crude or the adjusted model. The p-values are correlated between both models but with p-values from crude model slightly more significant. There are no hits that are very significant only in one of the models. 
-
-
 ## Sensitivity
 
 We run the GWAS after excluding the individuals with potential pathogenic SNVs or CNVs. 
 
 ```{r, cache = TRUE}
-path.snp <- getGWASTab(paste0("../results/associations/GWAS/", version,  "/Obesity.GWAS.plink.non_patho.locuszoom.input.gz"))
+path.snp <- getGWASTab("../results/associations/GWAS/2021-04-27/Obesity.GWAS.plink.nonPatho.locuszoom.input.gz")
 
 ```
 ```{r}
@@ -703,7 +422,7 @@ Therefore, the individuals with pathogenic variants share the common variants th
 We associated the chromosomal inversions from scoreInvHap with extreme obesity. We adjusted all the models by the first 10 principal components of genetic variance. 
 
 ```{r}
-load(paste0("../results/associations/inversions/", version, "/Obesity.inversions.assoc.Rdata"))
+load("../results/associations/inversions/2021-04-27/Obesity.inversions.assoc.Rdata")
 inv_assocs
 ```
 Only inv16_009 was associated with extreme obesity.
@@ -719,7 +438,7 @@ Inverted allele is more frequent in case samples. The results support a dominant
 Due to the polymorphic nature of inv16_009, we aimed to further explore the association of inv16 with the phenotypes. Current implementation of scoreInvHap does not discriminate between inv16 haplotypes, therefore, we relied on multidimensional scaling (MDS), the method that used invClust for genotyping.
 
 ```{r}
-load(paste0("../results/associations/inversions/", version, "/ObesityscoreInvHapClassDF.Rdata"))
+load("../results/associations/inversions/2021-04-27/ObesityscoreInvHapClassDF.Rdata")
 mds.df <- mds %>%
   data.frame() %>%
   mutate(id = rownames(.)) %>%
@@ -763,7 +482,7 @@ tabs <- attr(inv16_assocs, "tables")
 tabs
 ```
 
-In this setting, A means alternate allele and R the reference allele. For instance, in inv16_I, A/A means a II individual while RR is an NaNa, NaNb o NbNb individual. The association between the I allele and the extreme obesity has a reduced magnitude and it is only associated with the dominant and almost significant with the additive, suggesting that the I allele increases the risk of having extreme obesity. 
+In this setting, A means alternate allele and R the reference allele. For instance, in inv16_I, A/A means a II individual while RR is an NaNa, NaNb o NbNb individual. The association between the I allele and the extreme obesity has a reduced magnitude and it is no longer statistically significant. The standard alleles do not seem to be correlated with obesity. 
 
 # Genetic scores
 
@@ -780,10 +499,10 @@ famDf <- Reduce(rbind, famObj) %>%
          IID = V2) %>%
   dplyr::select(IID, Dataset)
 
-pcs <- read.table("../results/postImputation/stats/2021-05-25/mergedDataset.filtered.eigenvec")
+pcs <- read.table("../results/postImputation/stats/2021-04-26/mergedDataset.filtered.eigenvec")
 colnames(pcs) <- c("FID", "IID", paste0("PC", 1:10))
 
-pgs <- read.table(paste0("../results/associations/PRS/", version, "/obesity.profile"), 
+pgs <- read.table("../results/associations/PRS/2021-04-26/obesity.profile", 
                   header = TRUE) %>%
     mutate(STATUS = ifelse(grepl("SB", IID), "Control", "Case"),
            STATUS = factor(STATUS, levels = c("Control", "Case")),
@@ -807,17 +526,16 @@ pgs %>%
     geom_vline(xintercept = 0)
 
 pgs %>% 
-    glm(STATUS ~ PGS, ., family = "binomial") %>%
+    lm(PGS ~ STATUS, .) %>%
     summary()
 
 pgs %>% 
     dplyr::select(starts_with("PC"), STATUS, PGS) %>%
-    glm(STATUS ~ PGS + ., ., family = "binomial") %>%
+    lm(PGS ~ ., .) %>%
     summary()
 ```
 
 Case samples have higher polygenic risk scores than control samples. This difference is significant even after adjusting for genetic principal components. 
-
 
 
 ```{r}
@@ -930,4 +648,4 @@ pgs %>%
     summary()
 ```
 
-Individuals from Obesity2 have a lower PGS than individuals from Obesity1 or Obesity3.
+There are no significant differences in mean PGS between the three cohorts.

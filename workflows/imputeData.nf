@@ -129,8 +129,8 @@ process tpedToPlink {
 }
 ch_plink_variants = ch_plink_ini.join(ch_map)
 
-// Add correct allele and remove SNP with low call rate
-process addAlleles {
+// Add correct allele and sex
+process addAllelesSex {
 
   tag "$cohort"
 
@@ -143,10 +143,27 @@ process addAlleles {
 
   script:
   """
-  plink --bfile cohort --update-alleles $annot --geno 0.1 --make-bed --out allele
+  plink --bfile cohort --update-alleles $annot --impute-sex --make-bed --out allele
   """
 }
 
+// Remove SNP with low call rate or extreme HWE
+process removeBadSNPs {
+
+  tag "$cohort"
+
+
+  input:
+  set val(cohort), file(bed), file(bim), file(fam) from ch_plink_allele
+
+  output:
+  set val(cohort), file("filter.bed"), file("filter.bim"), file("filter.fam") into ch_plink_filter
+
+  script:
+  """
+  plink --bfile allele --geno 0.05 --hwe 1e-6 --make-bed --out filter
+  """
+}
 
 // Exclude bad samples
 process excludeBadSamples {
@@ -156,7 +173,7 @@ process excludeBadSamples {
   publishDir "${params.outdir}/preImputation/plink/${cohort}/${date}", mode: 'copy'
 
   input:
-  set val(cohort), file(bed), file(bim), file(fam) from ch_plink_allele
+  set val(cohort), file(bed), file(bim), file(fam) from ch_plink_filter
 
   output:
   set val(cohort), file("${cohort}.bed"), file("${cohort}.bim"), file("${cohort}.fam") into ch_geno_plink, ch_geno_plink2
@@ -164,7 +181,7 @@ process excludeBadSamples {
 
   script:
   """
-  plink --bfile allele  --mind 0.1 --make-bed --out $cohort
+  plink --bfile filter  --mind 0.1 --make-bed --out $cohort
   """
 }
 

@@ -317,12 +317,13 @@ process combineBadSamples {
   script:
   """
   ## Merge filter
-  cat $geno >> $excel
-  cat $extra >> $excel
+  cat $excel > tmp.txt
+  cat $geno >> tmp.txt
+  cat $extra >> tmp.txt
 
   ## Filter non-european samples
   awk '\$12 != "EUR" || \$13 <= 0.9 {print \$1}' FS="," $ancestry | grep -v sample_id >> $excel
-  sort -u $excel > bad.samples.combined.txt
+  sort -u tmp.txt > bad.samples.combined.txt
   sed 's/^/0\t/g' bad.samples.combined.txt >  bad.samples.plink.txt
   """
 }

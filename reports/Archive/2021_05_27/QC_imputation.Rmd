@@ -63,7 +63,7 @@ The following table shows the statistics after this initial QC:
 ```{r}
 iniQCall <- dir(path = "../results/preImputation/plink/", pattern = "fam|bim",
   full.names = TRUE, recursive = TRUE)
-version <- "2021-05-31"
+version <- "2021-05-11"
 iniQCall <- iniQCall[grep(version, iniQCall)]
 
 ## Get samples
@@ -96,7 +96,7 @@ getNumVariants <- function(path){
 
 HRCvcfs <- dir(path = "../results/preImputation/VCF/", pattern = "vcf",
   full.names = TRUE, recursive = TRUE)
-version <- "2021-05-31"
+version <- "2021-05-11"
 HRCvcfs <- HRCvcfs[grep(version, HRCvcfs)]
 HRCvariants <- sapply(datasets, function(x){
   data.vcfs <- HRCvcfs[grep(x, HRCvcfs)]
@@ -163,13 +163,13 @@ Impdf %>%
 We merged the four imputed datasets and selected the variants present in all of them.
 
 ```{r, cache = TRUE}
-comVariantsIni <- getNumVariants("../results/postImputation/merged/2021-06-04/merged.imputation.vcf.gz")
+comVariantsIni <- getNumVariants("../results/postImputation/merged/2021-05-25/merged.imputation.vcf.gz")
 ```
 
 Initially, we obtained `r comVariantsIni` variants present in the four datasets and imputed with a R2 \> 0.3. Next, we observed that variants with big differences in imputation quality between the cohorts resulted in artifactual associations. Thus, we selected variants whose difference in imputation quality (Rsq) between the best and worse cohort was lower than 0.2.
 
 ```{r, cache = TRUE}
-comVariants <- getNumVariants("../results/postImputation/merged/2021-06-04/merged.imputation.vcf.gz")
+comVariants <- getNumVariants("../results/postImputation/merged/2021-05-25/merged.imputation.vcf.gz")
 ```
 
 From this step, we worked with these `r comVariants`.
@@ -186,7 +186,7 @@ Based on the imputated dataset, we applied different filters to remove samples:
 - Non-obesity samples: Obesity1 included samples from other projects
 
 ```{r}
-version <- "2021-06-04"
+version <- "2021-05-25"
 filterSamps <- read.delim(paste0("../results/postImputation/stats/", version, "/exclude.samps.reason.txt"), sep = "\t", header = FALSE)
 colnames(filterSamps) <- c("sample_id", "reason")
 ancestry <- read.csv(paste0("../results/postImputation/stats/", version, "/merged.het_check.csv"))
@@ -263,3 +263,59 @@ ggplot(pcageno, aes(x = PC1, y = PC2, col = Dataset)) +
 ```
 
 Even after selecting European samples, we still see some stratification. 
+
+```{r}
+pcageno$Status <- factor(ifelse(pcageno$Dataset == "Epicuro", "Control", "Case"),
+                         levels = c("Control", "Case"))
+pc_assoc <- lapply(paste0("V", 3:12), function(x){
+  summary(lm(formula(paste(x, "~ Dataset")), pcageno))
+})
+names(pc_assoc) <- paste0("PC", 1:10)
+
+
+pc_assoc_status <- lapply(paste0("V", 3:12), function(x){
+  summary(glm(formula(paste("Status ~ ", x)), pcageno, family = "binomial"))
+})
+names(pc_assoc_status) <- paste0("PC", 1:10)
+```
+
+PC1 and PC4 are strongly associated with the dataset. 
+
+```{r}
+ggplot(pcageno, aes(x = PC1, y = PC4, col = Dataset)) +
+  geom_point() +
+  geom_hline(yintercept = 0.013) +
+  geom_vline(xintercept = 0.015)
+```
+We obaserved a subset of individuals from Epicuro with different PC1 and PC4 than the rest. Therefore, we tried to remove this individuals.
+
+```{r}
+pc_assoc_clean <- lapply(paste0("V", 3:12), function(x){
+  summary(lm(formula(paste(x, "~ Dataset")), pcageno, subset = V6 < 0.015))
+})
+names(pc_assoc_clean) <- paste0("PC", 1:10)
+
+pc_assoc_status_clean <- lapply(paste0("V", 3:12), function(x){
+  summary(glm(formula(paste("Status ~ ", x)), pcageno, family = "binomial", subset = V6 < 0.015))
+})
+names(pc_assoc_status_clean) <- paste0("PC", 1:10)
+```
+
+The associations with the PCA are reduced after the filtering:
+
+```{r}
+pcageno %>%
+  filter(PC1 < 0.013 & PC4 < 0.015) %>%
+ggplot(aes(x = PC1, y = PC4, col = Dataset)) +
+  geom_point() 
+```
+
+```{r}
+clust <- hclust(dist(pcageno[, c("V3", "V6")]))
+class <- cutree(clust, k = 14)
+pc_assoc_status_clean2 <- lapply(paste0("V", 3:12), function(x){
+  summary(glm(formula(paste("Status ~ ", x)), pcageno, family = "binomial", subset = class == 3))
+})
+names(pc_assoc_status_clean2) <- paste0("PC", 1:10)
+```
+

@@ -6,7 +6,7 @@
 date = java.time.LocalDate.now()
 
 plink = [file("${params.plink_prefix}.bed"), file("${params.plink_prefix}.bim"), file("${params.plink_prefix}.fam")]
-Channel.fromPath(plink).into{ch_plink_filter; ch_plink_freqs; ch_plink_assoc; ch_plink_depict; ch_plink_assoc_cohort; ch_plink_patho}
+Channel.fromPath(plink).into{ch_plink_filter; ch_plink_freqs; ch_plink_assoc; ch_plink_depict; ch_plink_assoc_cohort; ch_plink_patho; ch_plink_raw}
 Channel.fromPath(["${params.gwas_vcf_file}", "${params.gwas_vcf_file}.tbi"]).into{ch_vcf1; ch_vcf2; ch_vcf3; ch_vcfburden; ch_vcf_inv}
 
 pcs = file("${params.pcs_file}")
@@ -62,30 +62,6 @@ process createCovars {
   """
 }
 
-/*
-process runSingleGWAS {
-
-  publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
-
-  label 'process_medium'
-  label 'process_long'
-
-  input:
-  file(fam) from phenotype
-  file(covars) from ch_covars
-  set file(vcf), file(tbi) from ch_vcf1.collect()
-
-  output:
-  file("Obesity.GWAS.SingleWald.assoc.gz") into single_assoc
-
-  script:
-  """
-  rvtest --inVcf $vcf --pheno $fam --out Obesity.GWAS --single wald \
-  --covar $covars --covar-name A,B,C,D,E,F,G,H,I,J --noweb --sex --numThread ${task.cpus}
-  bgzip Obesity.GWAS.SingleWald.assoc
-  """
-}
-*/
 
 process runSingleGWASplink {
 
@@ -103,7 +79,7 @@ process runSingleGWASplink {
 
   script:
   """
-  cut -d ' ' -f 1,2,5-14 $covars > cov.txt
+  cut -d ' ' -f 1,2,5-13 $covars > cov.txt
   plink --bfile set --logistic --covar cov.txt --out Obesity.GWAS.plink
   """
 }
@@ -244,7 +220,7 @@ process runCohortGWASplink {
 
   script:
   """
-  cut -d ' ' -f 1,2,5-14 $covars > cov.txt
+  cut -d ' ' -f 1,2,5-13 $covars > cov.txt
   cat $fam1 > selsamps.txt
   cat $fam2 >> selsamps.txt
   cut -d ' ' -f 2 selsamps.txt | sed 's/^/0\t/g'  >  selsamps
@@ -342,33 +318,6 @@ process assocInversions {
 
 
 
-
-
-
-// process runBurdenGWAS {
-//
-//   publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
-//
-//   label 'process_medium'
-//   label 'process_long'
-//
-//   input:
-//   file(fam) from phenotype
-//   file(covars) from ch_covars_burden
-//   set file(vcf), file(tbi) from ch_vcfburden.collect()
-//   file(gene) from flat_gene
-//
-//   output:
-//   file("Obesity.GWAS.CMCWald.assoc")
-//
-//   script:
-//   """
-//   rvtest --inVcf $vcf --pheno $fam --out Obesity.GWAS --geneFile $flat_gene \
-//   --burden cmcWald --covar $covars \
-//   --covar-name A,B,C,D,E,F,G,H,I,J --noweb --sex --numThread ${task.cpus}
-//   """
-// }
-
 process processPRS {
 
   label 'process_long'
@@ -432,31 +381,51 @@ process runGWASplinkPatho {
   input:
   set file("set.bed"), file("set.bim"), file("set.fam") from ch_plink_patho.collect()
   file(covars) from ch_covars_patho
-  file(patho_samps) from ch_path_samps
+  file(bad_samps) from ch_path_samps
 
   output:
-  file("Obesity.GWAS.plink.nonPatho.assoc.logistic") into plink_assoc_patho
+  set val("non_patho"), file("Obesity.GWAS.plink.non_patho.assoc.logistic") into plink_assoc_patho
 
   script:
   """
-  cut -d ' ' -f 1,2,5-14 $covars > cov.txt
-  plink --bfile set --logistic --remove $patho_samps --covar cov.txt --out Obesity.GWAS.plink.nonPatho
+  cut -d ' ' -f 1,2,5-13 $covars > cov.txt
+  plink --bfile set --logistic --remove $bad_samps --out Obesity.GWAS.plink.non_patho
   """
 }
 
+process runGWASplinkRaw {
+
+  publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
+
+  label 'process_medium'
+  label 'process_long'
+
+  input:
+  set file("set.bed"), file("set.bim"), file("set.fam") from ch_plink_raw.collect()
+
+  output:
+  set val("raw"), file("Obesity.GWAS.plink.raw.assoc.logistic") into plink_assoc_raw
+
+  script:
+  """
+  plink --bfile set --logistic --out Obesity.GWAS.plink.raw
+  """
+}
+
+ch_gwas_comb = plink_assoc_patho.concat(plink_assoc_raw)
 
 process filterGWASpatho {
 
   input:
-  file(assoc) from plink_assoc_patho
+  set val(subset), file(assoc) from ch_gwas_comb
 
   output:
-  file("Obesity.GWAS.plink.nonPatho.assoc.SNPs.logistic") into plink_assoc_patho_comp
+  set val(subset), file("Obesity.GWAS.plink.${subset}.assoc.SNPs.logistic") into plink_assoc_patho_comp
 
   script:
   """
-  head -n1 $assoc > Obesity.GWAS.plink.nonPatho.assoc.SNPs.logistic
-  grep ADD $assoc >> Obesity.GWAS.plink.nonPatho.assoc.SNPs.logistic
+  head -n1 $assoc > Obesity.GWAS.plink.${subset}.assoc.SNPs.logistic
+  grep ADD $assoc >> Obesity.GWAS.plink.${subset}.assoc.SNPs.logistic
   """
 }
 
@@ -466,15 +435,15 @@ process compressGWASpatho {
   publishDir "${params.outdir}/associations/GWAS/${date}", mode: 'copy'
 
   input:
-  file(assoc) from plink_assoc_patho_comp
+  set val(subset), file(assoc) from plink_assoc_patho_comp
 
   output:
-  file("Obesity.GWAS.plink.nonPatho.locuszoom.input.gz")
+  file("Obesity.GWAS.plink.${subset}.locuszoom.input.gz")
 
   script:
   """
   tail -n +2 $assoc | tr -s ' ' '\t' | cut -f 2-10  > tmp.txt
   cut -f2 tmp.txt | awk -F ":" 'BEGIN {OFS = "\t"} {print \$3, \$4}' > alleles.txt
-  paste tmp.txt alleles.txt | bgzip -c  > Obesity.GWAS.plink.nonPatho.locuszoom.input.gz
+  paste tmp.txt alleles.txt | bgzip -c  > Obesity.GWAS.plink.${subset}.locuszoom.input.gz
   """
 }

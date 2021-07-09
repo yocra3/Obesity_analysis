@@ -31,3 +31,6 @@ RUN R -e 'devtools::install_github("isglobal-brge/scoreInvHap")'
 
 # Install libcurl for liftOver
 RUN apt-get install -q -y libcurl4
+
+# Install bugsnpr
+RUN R -e 'install.packages(c("bigsnpr", "bigreadr", "R.utils"), repos = "http://cran.us.r-project.org")'

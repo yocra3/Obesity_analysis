@@ -1,0 +1,211 @@
+---
+title: "Comparison PGS"
+author: "Carlos Ruiz"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+
+In this report, we compared the performance of 5 polygenic risk scores.
+
+```{r}
+library(kableExtra)
+library(tidyverse)
+library(epiDisplay)
+library(cowplot)
+require(MASS)
+```
+# Genetic scores
+
+We obtained polygenic risk scores with LDpred2 from large meta-analysis of adult BMI (GIANT and Locke), children obesity (EGG consortium and SCOOP), early-onset severe obesity (SCOOP). We compared these score with a previous PGS computed with Locke results.
+
+```{r}
+iniQCfam <- dir(path = "../results/preImputation/plink/", pattern = "fam",
+  full.names = TRUE, recursive = TRUE)
+names(iniQCfam) <- gsub(".fam", "", basename(iniQCfam))
+
+famObj <- lapply(iniQCfam, read.delim, header = FALSE, sep = " ")
+famDf <- Reduce(rbind, famObj) %>%
+  mutate(Dataset = rep(names(iniQCfam), sapply(famObj, nrow)),
+         IID = V2) %>%
+  dplyr::select(IID, Dataset)
+
+pcs <- read.table("../results/postImputation/stats/2021-06-04/mergedDataset.filtered.eigenvec")
+colnames(pcs) <- c("FID", "IID", paste0("PC", 1:10))
+```
+### Distribution of PGS
+```{r}
+version <- "2021-06-18"
+datasets <- c("Locke", "PGS000027", "EGG", "SCOOP_obesity", "SCOOP_extreme")
+
+
+getPGS <- function(dataset){
+  
+  pgs <- read.table(paste0("../results/associations/PRS/", version, "/", dataset, ".profile"), 
+                  header = TRUE) %>%
+    mutate(STATUS = ifelse(grepl("SB", IID), "Control", "Case"),
+           STATUS = factor(STATUS, levels = c("Control", "Case")),
+           PGS = (SCORESUM - mean(SCORESUM))/sd(SCORESUM), 
+           PGS_quantile = cut(PGS, 
+                              breaks = quantile(PGS, seq(0, 1, 0.1)),
+                              labels = paste0("Q", 1:10),
+                              include.lowest = TRUE),
+           PGS_carrier = ifelse(PGS_quantile == "Q10", "Carrier", "Reference"),
+           PGS_carrier = factor(PGS_carrier, levels = c("Reference", "Carrier")),
+           PGS_dataset = dataset) %>%
+    as_tibble()
+}
+pgs_list <- lapply(datasets, getPGS)
+pgs_tible <- Reduce(rbind, pgs_list) %>%
+    left_join(dplyr::select(pcs, -FID), by = "IID") %>%
+    left_join(famDf, by = "IID") %>%
+  mutate(PGS_dataset = factor(PGS_dataset, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")))
+```
+```{r}
+pgs_tible %>%
+  ggplot(aes(x = PGS_dataset, y = CNT2)) +
+  geom_boxplot() +
+  theme_bw()
+```
+PGS computed with LDpred2 had less than 1M SNPs while PGS00027 had more than 2M SNPs. 
+
+```{r}
+pgs_tible %>%
+    ggplot(aes(x = PGS, color = STATUS)) +
+    geom_density() +
+    theme_bw() +
+    geom_vline(xintercept = 0) +
+  facet_wrap(~ PGS_dataset)
+
+```
+
+We observed the biggest differencess in PGS betweeen case and control when using the GWAS from extreme obesity (SCOOP_extreme), followed by the GWAS from children obesity (SCOOP_obesity and EGG). Our approximation of PGS (Locke) returned a worse performance than the public PGS (PGS000027), probably due to the lower number of SNPs included.
+
+### General risk
+
+```{r}
+pgs_assoc_raw <- lapply(datasets, function(x) {
+  pgs_tible %>% 
+    filter(PGS_dataset == x) %>%
+    glm(STATUS ~ PGS, ., family = "binomial") 
+}) %>%
+  lapply(., function(x) {
+      a <- exp(cbind(coef(x), confint(x)))
+      colnames(a) <- c("OR", "OR_L", "OR_UP")
+       a[2, , drop = FALSE]
+    })
+pgs_assoc_raw <- Reduce(rbind, pgs_assoc_raw) %>%
+  as_tibble() %>%
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")),
+         model = "Raw")
+
+
+pgs_assoc_pcs <- lapply(datasets, function(x) {
+  pgs_tible %>% 
+    filter(PGS_dataset == x) %>%
+    dplyr::select(starts_with("PC"), STATUS, PGS) %>%
+    glm(STATUS ~ PGS + ., ., family = "binomial") 
+}) %>%
+  lapply(., function(x) {
+      a <- exp(cbind(coef(x), confint(x)))
+      colnames(a) <- c("OR", "OR_L", "OR_UP")
+      a[2, , drop = FALSE]
+    })
+pgs_assoc_pcs <- Reduce(rbind, pgs_assoc_pcs) %>%
+  as_tibble() %>%
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")), 
+         model = "PC adjusted")
+
+```
+```{r}
+rbind(pgs_assoc_raw, pgs_assoc_pcs) %>%
+  mutate(model = factor(model, levels = c("Raw", "PC adjusted"))) %>%
+  ggplot(aes(x = PGS_dataset, y = OR)) +
+  geom_bar(stat = "identity", position=position_dodge()) +
+  geom_errorbar(position = position_dodge(.9), width = .25, aes(ymin = OR_L, ymax = OR_UP)) +
+  scale_y_continuous(trans = "log2", 
+                     breaks = scales::trans_breaks("log2", function(x) round(2^x, 2))) +
+  facet_grid(~ model) +
+  theme(axis.text.x  = element_text(angle = 45, vjust=0.5))
+```
+
+Of the PGS computed with LDpred2, the PGS computed with the summary statistics of extreme obesity achieved the highest OR between cases and controls. However, the PGS uploaded to the PGS db (PGS000027) achieved a higher performance, while the PGS computed with LDpred2 using the same data (Locke) did not find differences between cases and controls. These results suggest that our approach to compute the PGS might not be very accurate. On the other hand, we did not find relevant differences between the raw model and the model adjusted for PCs.
+
+### Distribution of extreme quantiles
+
+
+```{r}
+pgs_Qtab <- pgs_tible %>%
+    mutate(PGS_cat = ifelse(PGS_quantile == "Q1", "Bottom quantile", 
+                            ifelse(PGS_quantile == "Q10", "Top quantile", 
+                                   "Quantiles 2-9")),
+           PGS_cat = factor(PGS_cat, 
+                            levels = c("Bottom quantile", "Quantiles 2-9", "Top quantile"))) %>%
+    group_by(STATUS, PGS_cat, PGS_dataset) %>%
+    summarize(n = n()) %>%
+    group_by(PGS_cat) %>%
+    mutate(prop = n/sum(n))
+pgs_Qtab %>%
+    ggplot(aes(x = PGS_cat, y = prop, fill = PGS_cat)) +
+    geom_bar(stat = "identity", colour = "black") +
+    facet_grid(PGS_dataset ~ STATUS) +
+    xlab("Disease Status") +
+    ylab("Percent") +
+    scale_fill_manual(name = "Polygenic score", values = c("#EEEEEE", "#999999", "#444444"))
+```
+For PGS000027 and SCOOP_extreme, the bottom PGS quantile had a lower proportion of cases while the top was enriched in cases. This difference was not present in Locke. 
+
+### Risk of top quantile
+
+
+```{r}
+pgs_assoc_quant_raw <- lapply(datasets, function(x) {
+  pgs_tible %>% 
+    filter(PGS_dataset == x) %>%
+    glm(STATUS ~ PGS_carrier, ., family = "binomial") 
+}) %>%
+  lapply(., function(x) {
+      a <- exp(cbind(coef(x), confint(x)))
+      colnames(a) <- c("OR", "OR_L", "OR_UP")
+       a[2, , drop = FALSE]
+    })
+pgs_assoc_quant_raw <- Reduce(rbind, pgs_assoc_quant_raw) %>%
+  as_tibble() %>%
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")),
+         model = "Raw")
+
+
+pgs_assoc_quant_pcs <- lapply(datasets, function(x) {
+  pgs_tible %>% 
+    filter(PGS_dataset == x) %>%
+    dplyr::select(starts_with("PC"), STATUS, PGS_carrier) %>%
+    glm(STATUS ~ PGS_carrier + ., ., family = "binomial") 
+}) %>%
+  lapply(., function(x) {
+      a <- exp(cbind(coef(x), confint(x)))
+      colnames(a) <- c("OR", "OR_L", "OR_UP")
+      a[2, , drop = FALSE]
+    })
+pgs_assoc_quant_pcs <- Reduce(rbind, pgs_assoc_quant_pcs) %>%
+  as_tibble() %>%
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")), 
+         model = "PC adjusted")
+```
+
+```{r}
+rbind(pgs_assoc_quant_raw, pgs_assoc_quant_pcs) %>%
+  mutate(model = factor(model, levels = c("Raw", "PC adjusted"))) %>%
+  ggplot(aes(x = PGS_dataset, y = OR)) +
+  geom_bar(stat = "identity", position=position_dodge()) +
+  geom_errorbar(position = position_dodge(.9), width = .25, aes(ymin = OR_L, ymax = OR_UP)) +
+  scale_y_continuous(trans = "log2", 
+                     breaks = scales::trans_breaks("log2", function(x) round(2^x, 2))) +
+  facet_grid(~ model) +
+  theme(axis.text.x  = element_text(angle = 45, vjust=0.5))
+```
+The OR of the top quantile is higher than 2 for SCOOP_extreme and PGS000027. Again, the PGS000027 dataset achieved a better performance than the scores computed with LDpred2.

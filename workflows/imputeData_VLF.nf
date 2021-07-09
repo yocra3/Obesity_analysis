@@ -56,7 +56,7 @@ process excludeBadSNPs {
 
   script:
   """
-  plink --bfile VLF --geno 0.1 --make-bed --out allele
+  plink --bfile VLF --geno 0.05 --hwe 1e-6 --make-bed --out allele
   """
 }
 
