@@ -9,6 +9,7 @@ Channel.fromPath(["${params.gwas_vcf_file}", "${params.gwas_vcf_file}.tbi"]).int
 
 ch_pgs = Channel.of('PGS000027').concat(Channel.fromPath("${params.prs_file}"))
 ld_folder = file("${params.ld_folder}")
+map_file = file("${params.mapFile}")
 
 
 
@@ -34,6 +35,7 @@ process definePRS_R {
   input:
   set val(dataset), file(sumstats), val(n_cases), val(n_controls) from ch_prs_input
   path(ld_folder)
+  file(map_file)
 
   output:
   set val(dataset), file("${dataset}.ldpred2_prs.txt.gz") into prs_r

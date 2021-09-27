@@ -41,7 +41,7 @@ colnames(pcs) <- c("FID", "IID", paste0("PC", 1:10))
 ### Distribution of PGS
 ```{r}
 version <- "2021-06-18"
-datasets <- c("Locke", "PGS000027", "EGG", "SCOOP_obesity", "SCOOP_extreme")
+datasets <- c("Locke", "PGS000027", "EGG", "SCOOP_obesity", "SCOOP_extreme", "giant_LDAK")
 
 
 getPGS <- function(dataset){
@@ -64,7 +64,8 @@ pgs_list <- lapply(datasets, getPGS)
 pgs_tible <- Reduce(rbind, pgs_list) %>%
     left_join(dplyr::select(pcs, -FID), by = "IID") %>%
     left_join(famDf, by = "IID") %>%
-  mutate(PGS_dataset = factor(PGS_dataset, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")))
+  mutate(PGS_dataset = factor(PGS_dataset, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke", "giant_LDAK"))) %>%
+  distinct()
 ```
 ```{r}
 pgs_tible %>%
@@ -84,7 +85,7 @@ pgs_tible %>%
 
 ```
 
-We observed the biggest differencess in PGS betweeen case and control when using the GWAS from extreme obesity (SCOOP_extreme), followed by the GWAS from children obesity (SCOOP_obesity and EGG). Our approximation of PGS (Locke) returned a worse performance than the public PGS (PGS000027), probably due to the lower number of SNPs included.
+We observed the biggest differences in PGS betweeen case and control when using the GWAS from extreme obesity (SCOOP_extreme), followed by the GWAS from children obesity (SCOOP_obesity and EGG). Our approximation of PGS (Locke) returned a worse performance than the public PGS (PGS000027), probably due to the lower number of SNPs included.
 
 ### General risk
 
@@ -101,7 +102,7 @@ pgs_assoc_raw <- lapply(datasets, function(x) {
     })
 pgs_assoc_raw <- Reduce(rbind, pgs_assoc_raw) %>%
   as_tibble() %>%
-  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")),
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke", "giant_LDAK")),
          model = "Raw")
 
 
@@ -118,7 +119,7 @@ pgs_assoc_pcs <- lapply(datasets, function(x) {
     })
 pgs_assoc_pcs <- Reduce(rbind, pgs_assoc_pcs) %>%
   as_tibble() %>%
-  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")), 
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke", "giant_LDAK")), 
          model = "PC adjusted")
 
 ```
@@ -176,7 +177,7 @@ pgs_assoc_quant_raw <- lapply(datasets, function(x) {
     })
 pgs_assoc_quant_raw <- Reduce(rbind, pgs_assoc_quant_raw) %>%
   as_tibble() %>%
-  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")),
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke", "giant_LDAK")),
          model = "Raw")
 
 
@@ -193,7 +194,7 @@ pgs_assoc_quant_pcs <- lapply(datasets, function(x) {
     })
 pgs_assoc_quant_pcs <- Reduce(rbind, pgs_assoc_quant_pcs) %>%
   as_tibble() %>%
-  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke")), 
+  mutate(PGS_dataset = factor(datasets, levels = c("SCOOP_extreme", "SCOOP_obesity", "EGG", "PGS000027", "Locke", "giant_LDAK")), 
          model = "PC adjusted")
 ```
 

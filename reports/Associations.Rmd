@@ -814,6 +814,12 @@ pgs %>%
     dplyr::select(starts_with("PC"), STATUS, PGS) %>%
     glm(STATUS ~ PGS + ., ., family = "binomial") %>%
     summary()
+
+
+pgs %>% 
+    dplyr::select(starts_with("PC"), STATUS, PGS) %>%
+    lm(PGS ~ STATUS + ., .) %>%
+    summary()
 ```
 
 Case samples have higher polygenic risk scores than control samples. This difference is significant even after adjusting for genetic principal components. 
@@ -875,7 +881,9 @@ pgs <- pgs %>%
   mutate(STATUS2 = ifelse(STATUS == "Case" & IID %in% pathVars$Patient, "Case_pathogenic",
                           ifelse(STATUS == "Case" & IID %in% cnvs$Patient, "Case_cnv", 
                                  ifelse(STATUS == "Case", "Case_novariants", "Control"))),
-         STATUS2 = factor(STATUS2, levels = c("Case_novariants", "Case_cnv", "Case_pathogenic", "Control")))
+         STATUS2 = factor(STATUS2, levels = c("Case_novariants", "Case_cnv", "Case_pathogenic", "Control")),
+        STATUS3 = ifelse(STATUS2 == "Case_cnv", "Case_pathogenic", as.character(STATUS2))) %>%
+  distinct()
   
 
 ```
@@ -899,6 +907,11 @@ pgs %>%
 
 pgs %>% 
     dplyr::select(starts_with("PC"), STATUS2, PGS) %>%
+    lm(PGS ~ ., .) %>%
+    summary()
+
+pgs %>% 
+    dplyr::select(starts_with("PC"), STATUS3, PGS) %>%
     lm(PGS ~ ., .) %>%
     summary()
 ```
